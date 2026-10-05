@@ -1,0 +1,7 @@
+# Local overrides for `wrangler pages dev`. Never commit .dev.vars.
+# Point at your real Supabase project to sign in locally:
+SUPABASE_URL=https://YOUR-PROJECT-REF.supabase.co
+OWNER_EMAIL=you@example.com
+# Only needed for scripts/isolation-check.mjs (it mints HS256 test tokens).
+# Leave unset in production.
+# SUPABASE_JWT_SECRET=any-long-random-string

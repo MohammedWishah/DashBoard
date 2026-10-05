@@ -1,0 +1,1 @@
+ALTER TABLE `users` ADD `features` text DEFAULT '["money","planner"]' NOT NULL;

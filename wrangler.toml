@@ -1,0 +1,17 @@
+name = "project-board"
+compatibility_date = "2026-10-01"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "./dist"
+
+[vars]
+# Your Supabase project URL (Project Settings > API). Public, not a secret.
+SUPABASE_URL = "https://YOUR-PROJECT-REF.supabase.co"
+# Who owns the data from before multi-user. Claimed on that person's first sign-in.
+OWNER_EMAIL = ""
+
+[[d1_databases]]
+binding = "DB"
+database_name = "project-board"
+# Replace with the id printed by `npx wrangler d1 create project-board`.
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "db/migrations"

@@ -135,6 +135,47 @@ const bob2 = await bob("POST", "/projects", { name: `B2 ${run}`, nextAction: "x"
 const bob3 = await bob("POST", "/projects", { name: `B3 ${run}`, nextAction: "x", status: "active" });
 check("Bob's own active limit applies", bob2.status === 201 && bob3.status === 409, `${bob2.status}/${bob3.status}`);
 
+// ---- planner (browser)
+const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin" }).format(new Date());
+const tomorrow = new Date(Date.parse(`${today}T12:00:00Z`) + 86400000).toISOString().slice(0, 10);
+const ownerHabit = await owner("POST", "/planner/habits", { name: `Read ${run}`, frequency: "daily" });
+check("owner creates a habit", ownerHabit.status === 201, JSON.stringify(ownerHabit.body));
+const bobGym = await bob("POST", "/planner/habits", { name: "Gym", frequency: "weekly" });
+const bobRead = await bob("POST", "/planner/habits", { name: `Read ${run}`, frequency: "daily" });
+check("same habit name allowed for two users", bobGym.status === 201 && bobRead.status === 201);
+check("name clash ignores case and frequency (409)", (await bob("POST", "/planner/habits", { name: " gym ", frequency: "daily" })).status === 409);
+check("rename into a clash (409)", (await bob("PATCH", `/planner/habits/${bobRead.body.habit.id}`, { name: "GYM" })).status === 409);
+const oh = ownerHabit.body.habit.id;
+const tick = await owner("PUT", `/planner/habits/${oh}/checks/${today}`);
+check("owner ticks today", tick.status === 200 && tick.body.checked === true, JSON.stringify(tick.body));
+check("ticking twice is a no-op (200)", (await owner("PUT", `/planner/habits/${oh}/checks/${today}`)).status === 200);
+check("future tick rejected (400)", (await owner("PUT", `/planner/habits/${oh}/checks/${tomorrow}`)).status === 400);
+check("wrong period key for weekly rejected (400)", (await bob("PUT", `/planner/habits/${bobGym.body.habit.id}/checks/2026-10-06`)).status === 400);
+const ownerDay = (await owner("GET", `/planner/day?date=${today}`)).body;
+check("owner's day shows the tick and a streak", ownerDay.habits.daily.some((h) => h.id === oh && h.checked && h.streak >= 1), JSON.stringify(ownerDay.habits.daily));
+const put = await owner("PUT", `/planner/day/${today}/tasks`, { tasks: [{ text: "Owner task" }, { text: "Second", done: true }] });
+check("owner sets top 3", put.status === 200 && put.body.tasks.length === 2 && put.body.tasks[1].position === 2, JSON.stringify(put.body));
+check("4 tasks rejected (400)", (await owner("PUT", `/planner/day/${today}/tasks`, { tasks: [{ text: "a" }, { text: "b" }, { text: "c" }, { text: "d" }] })).status === 400);
+const ownerTaskId = put.body.tasks[0].id;
+// Bob can't see or touch any of it
+const bobDay = (await bob("GET", `/planner/day?date=${today}`)).body;
+check("Bob's day has none of the owner's tasks or habits", bobDay.tasks.length === 0 && !JSON.stringify(bobDay).includes(oh));
+for (const [name, fn] of [
+  ["tick owner's habit", () => bob("PUT", `/planner/habits/${oh}/checks/${today}`)],
+  ["untick owner's habit", () => bob("DELETE", `/planner/habits/${oh}/checks/${today}`)],
+  ["rename owner's habit", () => bob("PATCH", `/planner/habits/${oh}`, { name: "hacked" })],
+  ["delete owner's habit", () => bob("DELETE", `/planner/habits/${oh}`)],
+  ["edit owner's task", () => bob("PATCH", `/planner/tasks/${ownerTaskId}`, { done: true })],
+]) {
+  const r = await fn();
+  check(`Bob can't ${name} (404)`, r.status === 404, `got ${r.status}`);
+}
+const ownerMonth = (await owner("GET", `/planner/month?month=${today.slice(0, 7)}`)).body;
+check("owner's month has the tick", ownerMonth.daily.some((r) => r.habit.id === oh && r.checks.includes(today)), JSON.stringify(ownerMonth.daily));
+check("unticking twice is a no-op (200)", (await owner("DELETE", `/planner/habits/${oh}/checks/${today}`)).status === 200 && (await owner("DELETE", `/planner/habits/${oh}/checks/${today}`)).status === 200);
+check("owner's task untouched", (await owner("GET", `/planner/day?date=${today}`)).body.tasks[0].done === false);
+check("empty top 3 clears the day", (await owner("PUT", `/planner/day/${today}/tasks`, { tasks: [] })).body.tasks.length === 0);
+
 // ---- agent tokens reach only their owner
 const tok = await bob("POST", "/agent-tokens", { name: "Bob's speaker" });
 check("token created once with lb_ prefix", tok.status === 201 && /^lb_/.test(tok.body.token));
@@ -151,6 +192,9 @@ await owner("PATCH", `/admin/users/${bobMe.id}`, { features: ["planner", "projec
 check("Money removed: overview 403", (await bob("GET", "/money/overview")).status === 403);
 check("Money removed: agent money 403", (await agent("GET", "/agent/money/left")).status === 403);
 check("Projects still allowed for agent", (await agent("GET", "/agent/projects")).status === 200);
+await owner("PATCH", `/admin/users/${bobMe.id}`, { features: ["money", "projects"] });
+check("Planner removed: browser 403", (await bob("GET", "/planner/day")).status === 403);
+check("Planner removed: agent 403", (await agent("GET", "/agent/planner/today")).status === 403);
 await owner("PATCH", `/admin/users/${bobMe.id}`, { features: ["money", "planner", "projects"] });
 
 // ---- agent expense logging (give Food a limit so the "left this month" sentence shows)

@@ -10,6 +10,7 @@ import { adminRoutes } from "./routes/admin";
 import { agentRoutes } from "./routes/agent";
 import { browserRoutes } from "./routes/browser";
 import { moneyRoutes } from "./routes/money";
+import { plannerRoutes } from "./routes/planner";
 
 const app = new Hono<AppEnv>().basePath("/api");
 
@@ -24,10 +25,12 @@ app.use("*", async (c, next) => {
 const projectPaths = ["/projects", "/projects/*", "/stats", "/settings", "/agent/projects", "/agent/projects/*", "/agent/next-actions"];
 for (const path of projectPaths) app.use(path, requireFeature("projects"));
 for (const path of ["/money/*", "/agent/money/*"]) app.use(path, requireFeature("money"));
+for (const path of ["/planner/*", "/agent/planner/*"]) app.use(path, requireFeature("planner"));
 app.use("/admin/*", requireAdmin);
 
 app.route("/agent", agentRoutes);
 app.route("/money", moneyRoutes);
+app.route("/planner", plannerRoutes);
 app.route("/admin", adminRoutes);
 app.route("/", browserRoutes);
 

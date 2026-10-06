@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+"""Tiny client for Life Board's agent API. Standard library only.
+
+  life_board.py log --category Food --amount 12.40 [--note "Lidl"] [--date 2026-10-05]
+  life_board.py undo EXPENSE_ID
+  life_board.py left
+
+Reads LIFE_BOARD_URL and LIFE_BOARD_TOKEN from the environment. Prints the JSON reply.
+Exit code 0 on success, 1 on an API error (the JSON error is still printed), 2 on setup errors.
+"""
+import argparse
+import json
+import os
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+
+
+def emit(raw):
+    # Pass the server's UTF-8 through as bytes, so "€" survives any console encoding.
+    sys.stdout.buffer.write(raw.rstrip(b"\n") + b"\n")
+    sys.stdout.flush()
+
+
+def call(method, path, body=None):
+    base = os.environ.get("LIFE_BOARD_URL", "").rstrip("/")
+    token = os.environ.get("LIFE_BOARD_TOKEN", "")
+    if not base or not token:
+        print(json.dumps({"error": {"code": "not_configured", "message": "Set LIFE_BOARD_URL and LIFE_BOARD_TOKEN in ~/.hermes/.env"}}))
+        sys.exit(2)
+    data = None if body is None else json.dumps(body).encode()
+    req = urllib.request.Request(f"{base}/api/agent{path}", data=data, method=method)
+    req.add_header("Authorization", f"Bearer {token}")
+    if data is not None:
+        req.add_header("Content-Type", "application/json")
+    try:
+        with urllib.request.urlopen(req, timeout=15) as res:
+            emit(res.read())
+    except urllib.error.HTTPError as e:
+        emit(e.read())
+        sys.exit(1)
+    except urllib.error.URLError as e:
+        print(json.dumps({"error": {"code": "unreachable", "message": str(e.reason)}}))
+        sys.exit(1)
+
+
+def main():
+    p = argparse.ArgumentParser(description="Life Board money client")
+    sub = p.add_subparsers(dest="cmd", required=True)
+    log = sub.add_parser("log")
+    log.add_argument("--category", required=True)
+    log.add_argument("--amount", required=True, type=float, help="euros, e.g. 12.40")
+    log.add_argument("--note")
+    log.add_argument("--date", help="YYYY-MM-DD, default today")
+    undo = sub.add_parser("undo")
+    undo.add_argument("id")
+    sub.add_parser("left")
+    a = p.parse_args()
+
+    if a.cmd == "log":
+        body = {"category": a.category, "amount": a.amount}
+        if a.note:
+            body["note"] = a.note
+        if a.date:
+            body["spentOn"] = a.date
+        call("POST", "/money/expenses", body)
+    elif a.cmd == "undo":
+        call("DELETE", f"/money/expenses/{urllib.parse.quote(a.id, safe='')}")
+    else:
+        call("GET", "/money/left")
+
+
+if __name__ == "__main__":
+    main()

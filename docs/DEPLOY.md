@@ -94,3 +94,7 @@ The backend and frontend are set up separately because they run in different pla
 - **Login works locally but not live**: check `SUPABASE_URL` in `wrangler.toml`, then redeploy.
 - **"no such table"**: run `npm run db:migrate:remote`.
 - **Blank page, auth errors in the console**: `.env.local` was missing or wrong at build time. Fix it, then run `npm run deploy` again.
+
+## Hermes Agent (Telegram)
+
+Log spending by message or voice note: see `integrations/hermes/life-board-money/SKILL.md`. Copy that folder to `~/.hermes/skills/` and put `LIFE_BOARD_URL` and `LIFE_BOARD_TOKEN` in `~/.hermes/.env`.

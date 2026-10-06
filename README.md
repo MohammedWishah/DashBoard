@@ -94,6 +94,8 @@ The isolation check signs its own test tokens. Set `SUPABASE_JWT_SECRET=any-long
 
 ## Deploy to Cloudflare Pages
 
+Short version with explanations: [docs/DEPLOY.md](docs/DEPLOY.md).
+
 1. **Log in**
 
    ```bash

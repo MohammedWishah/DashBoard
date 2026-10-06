@@ -1,6 +1,6 @@
 # Deploy cheat sheet
 
-How Life Board gets from this folder to `https://project-board.pages.dev`.
+How Life Board gets from this folder to `https://app.mohammedwishah.com` (also `project-board-5ll.pages.dev`).
 
 ## The picture
 
@@ -19,14 +19,39 @@ D1 database (all your data: projects, money, ...)
 - **Supabase** handles login only. No data lives there.
 - **wrangler** is Cloudflare's CLI. Every Cloudflare command goes through it.
 
-## Every deploy (after the first)
+## Every deploy (automatic)
+
+Push to `main`. GitHub Actions (`.github/workflows/deploy.yml`) then:
+
+1. runs typecheck + tests (stops if anything fails, so production stays as it was)
+2. applies new migrations to the cloud database
+3. builds and deploys
+
+Watch it in the repo's **Actions** tab. To redeploy without a new commit, open **Actions → Deploy → Run workflow**.
+
+Migrations change the database's tables. D1 remembers which ones already ran, so running them on every deploy is safe.
+
+Manual fallback, from your machine:
 
 ```
-npm run db:migrate:remote   # only if a new file appeared in db/migrations/
-npm run deploy              # builds dist/, uploads dist/ + functions/
+npm run db:migrate:remote
+npm run deploy
 ```
 
-Migrations change the database's tables. D1 remembers which ones already ran, so running it again is safe.
+### Auto-deploy setup (one time)
+
+Why Actions and not Cloudflare's "connect to GitHub" button: the Pages project was created with wrangler (Direct Upload), and Cloudflare can't switch those to Git. Actions also runs the migrations, which the button wouldn't.
+
+1. **Cloudflare API token**: dash.cloudflare.com → My Profile → API Tokens → Create Token → Custom. Permissions: *Account · Cloudflare Pages · Edit* and *Account · D1 · Edit*. Copy the token (shown once).
+2. **Account ID**: `npx wrangler whoami` prints it.
+3. **GitHub secrets**: repo → Settings → Secrets and variables → Actions → New repository secret. Add:
+   - `CLOUDFLARE_API_TOKEN`
+   - `CLOUDFLARE_ACCOUNT_ID`
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_PUBLISHABLE_KEY` (same values as `.env.local`)
+4. Push. The first run shows up under **Actions**.
+
+The API token is a real secret. It lives only in GitHub secrets, never in a file.
 
 ## One-time setup
 
@@ -39,7 +64,7 @@ Migrations change the database's tables. D1 remembers which ones already ran, so
 | 5 | `npm run db:migrate:remote` | Creates the tables in the cloud database. |
 | 6 | `npx wrangler pages project create project-board --production-branch main` | Creates the hosting slot. |
 | 7 | `npm run deploy` | Builds and uploads. Prints the live URL. |
-| 8 | In Supabase: **Auth → URL Configuration** | Set **Site URL** to `https://project-board.pages.dev` so invite links point at the app. |
+| 8 | In Supabase: **Auth → URL Configuration** | Set **Site URL** to `https://app.mohammedwishah.com` so invite links point at the app. |
 | 9 | In Supabase: **Auth → Users → Invite user** | Invite yourself (same email as `OWNER_EMAIL`), set a password, sign in. |
 
 Where the Supabase values are: **Project Settings → API**.

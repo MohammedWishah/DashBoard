@@ -1,0 +1,40 @@
+# Every push to main: check, migrate the cloud database, build, deploy.
+# Needs 4 repo secrets (GitHub > Settings > Secrets and variables > Actions):
+#   CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID,
+#   VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # adds a "Run workflow" button in the Actions tab
+
+concurrency: deploy # never two deploys at once
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      # Stop here if anything is broken, before touching production.
+      - run: npm run typecheck
+      - run: npm test
+
+      # Applies only migrations the cloud database hasn't run yet.
+      - run: npx wrangler d1 migrations apply project-board --remote
+
+      - run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+
+      - run: npx wrangler pages deploy --branch main

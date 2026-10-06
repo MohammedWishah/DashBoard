@@ -247,6 +247,8 @@ check("agent reads the plan", plan.status === 200 && plan.body.speech.startsWith
 const untick = await agent("DELETE", "/agent/planner/habits/check", { habit: "Gym" });
 check("agent unticks", untick.status === 200 && untick.body.checked === false && untick.body.speech === "Unticked Gym for this week.", JSON.stringify(untick.body));
 check("Bob's agent can't see owner's habits", !JSON.stringify(plan.body).includes(`${oh}`));
+const bobExport3 = (await bob("GET", "/export")).body;
+check("export is version 3 with Bob's planner only", bobExport3.version === 3 && bobExport3.planner.habits.length === 2 && !JSON.stringify(bobExport3.planner).includes(`${oh}`), JSON.stringify(bobExport3.planner?.habits?.map((h) => h.name)));
 
 await bob("DELETE", `/agent-tokens/${tok.body.id}`);
 check("revoked token stops working", (await agent("GET", "/agent/projects")).status === 401);
@@ -259,6 +261,11 @@ check("Bob can import his export", imp.status === 200, JSON.stringify(imp.body))
 check("Bob's import left owner's projects alone", (await owner("GET", "/projects")).body.projects.length === before);
 const reimported = (await bob("GET", "/projects")).body.projects;
 check("import gave rows new ids", reimported.length === 1 && reimported[0].id !== bobProj.body.project.id);
+const imp3 = await bob("POST", "/import", bobExport3);
+check("version 3 import restores planner", imp3.status === 200 && imp3.body.imported.habits === 2, JSON.stringify(imp3.body));
+const bobHabitsAfter = (await bob("GET", "/planner/habits")).body.habits;
+check("imported habits got new ids", bobHabitsAfter.length === 2 && bobHabitsAfter.every((h) => h.id !== bobGym.body.habit.id && h.id !== bobRead.body.habit.id));
+check("owner's habits untouched by Bob's import", (await owner("GET", "/planner/habits")).body.habits.some((h) => h.id === oh));
 
 console.log(failures === 0 ? "\nAll isolation checks passed." : `\n${failures} check(s) FAILED.`);
 process.exit(failures === 0 ? 0 : 1);

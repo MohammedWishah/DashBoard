@@ -3,9 +3,12 @@ import type { BatchItem } from "drizzle-orm/batch";
 import type { SQLiteTable } from "drizzle-orm/sqlite-core";
 import {
   categories,
+  dayTasks,
   debtPayments,
   debts,
   expenses,
+  habitChecks,
+  habits,
   income,
   projects,
   recurringBills,
@@ -33,7 +36,7 @@ function insertChunked<T extends SQLiteTable>(db: Db, table: T, rows: T["$inferI
 const strip = <T extends { userId: string }>(rows: T[]) => rows.map(({ userId: _owner, ...rest }) => rest);
 
 export async function exportAll(db: Db, userId: string): Promise<ExportData> {
-  const [p, e, s, cat, bill, exp, inc, goal, contrib, debt, pay] = await db.batch([
+  const [p, e, s, cat, bill, exp, inc, goal, contrib, debt, pay, hab, chk, tsk] = await db.batch([
     db.select().from(projects).where(eq(projects.userId, userId)),
     db.select().from(shippedEvents).where(eq(shippedEvents.userId, userId)),
     db.select().from(settings).where(eq(settings.userId, userId)),
@@ -45,9 +48,12 @@ export async function exportAll(db: Db, userId: string): Promise<ExportData> {
     db.select().from(savingsContributions).where(eq(savingsContributions.userId, userId)),
     db.select().from(debts).where(eq(debts.userId, userId)),
     db.select().from(debtPayments).where(eq(debtPayments.userId, userId)),
+    db.select().from(habits).where(eq(habits.userId, userId)),
+    db.select().from(habitChecks).where(eq(habitChecks.userId, userId)),
+    db.select().from(dayTasks).where(eq(dayTasks.userId, userId)),
   ]);
   return {
-    version: 2,
+    version: 3,
     exportedAt: nowIso(),
     projects: strip(p),
     shippedEvents: strip(e),
@@ -62,6 +68,7 @@ export async function exportAll(db: Db, userId: string): Promise<ExportData> {
       debts: strip(debt),
       debtPayments: strip(pay),
     },
+    planner: { habits: strip(hab), habitChecks: strip(chk), dayTasks: strip(tsk) },
   };
 }
 
@@ -80,7 +87,8 @@ function idMapper() {
 
 /**
  * Replaces the signed-in user's data in one D1 batch (one transaction: all or nothing).
- * Version 2 replaces everything. Version 1 only has projects, so money is left untouched.
+ * Version 3 replaces everything. Version 2 leaves planner data untouched. Version 1 only has
+ * projects, so money and planner are left untouched.
  * The schema check already guaranteed every reference points at a row in the file.
  */
 export async function importAll(db: Db, userId: string, data: ExportData) {
@@ -91,7 +99,7 @@ export async function importAll(db: Db, userId: string, data: ExportData) {
     db.delete(projects).where(eq(projects.userId, userId)),
     db.delete(settings).where(eq(settings.userId, userId)),
   ];
-  if (data.version === 2) {
+  if (data.version === 2 || data.version === 3) {
     // Children first so foreign keys never point at deleted rows.
     statements.push(
       db.delete(debtPayments).where(eq(debtPayments.userId, userId)),
@@ -104,6 +112,13 @@ export async function importAll(db: Db, userId: string, data: ExportData) {
       db.delete(categories).where(eq(categories.userId, userId)),
     );
   }
+  if (data.version === 3) {
+    statements.push(
+      db.delete(habitChecks).where(eq(habitChecks.userId, userId)),
+      db.delete(dayTasks).where(eq(dayTasks.userId, userId)),
+      db.delete(habits).where(eq(habits.userId, userId)),
+    );
+  }
 
   statements.push(
     ...insertChunked(db, projects, data.projects.map((r) => ({ ...r, id: id(r.id), userId }))),
@@ -111,7 +126,7 @@ export async function importAll(db: Db, userId: string, data: ExportData) {
     ...insertChunked(db, settings, data.settings.map((r) => ({ ...r, userId }))),
   );
 
-  if (data.version === 2) {
+  if (data.version === 2 || data.version === 3) {
     const m = data.money;
     statements.push(
       ...insertChunked(db, categories, m.categories.map((r) => ({ ...r, id: id(r.id), userId }))),
@@ -134,12 +149,21 @@ export async function importAll(db: Db, userId: string, data: ExportData) {
       ...insertChunked(db, debtPayments, m.debtPayments.map((r) => ({ ...r, id: id(r.id), debtId: id(r.debtId), userId }))),
     );
   }
+  if (data.version === 3) {
+    const p = data.planner;
+    statements.push(
+      ...insertChunked(db, habits, p.habits.map((r) => ({ ...r, id: id(r.id), userId }))),
+      ...insertChunked(db, habitChecks, p.habitChecks.map((r) => ({ ...r, habitId: id(r.habitId), userId }))),
+      ...insertChunked(db, dayTasks, p.dayTasks.map((r) => ({ ...r, id: id(r.id), userId }))),
+    );
+  }
 
   await db.batch(statements as [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]]);
   return {
     projects: data.projects.length,
     shippedEvents: data.shippedEvents.length,
     settings: data.settings.length,
-    ...(data.version === 2 && { expenses: data.money.expenses.length, bills: data.money.recurringBills.length }),
+    ...((data.version === 2 || data.version === 3) && { expenses: data.money.expenses.length, bills: data.money.recurringBills.length }),
+    ...(data.version === 3 && { habits: data.planner.habits.length, habitChecks: data.planner.habitChecks.length }),
   };
 }

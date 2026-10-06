@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { MAX_ACTIVE_PROJECTS, normalizeName } from "./rules";
 import { moneyExportSchema, type MoneyExport } from "./money-schemas";
+import { plannerExportSchema, type PlannerExport } from "./planner-schemas";
 
 export { MAX_ACTIVE_PROJECTS, normalizeName };
 
@@ -91,16 +92,19 @@ const exportBase = {
 };
 
 /**
- * Full data dump. `GET /api/export` returns version 2.
- * `POST /api/import` accepts 2 (replaces everything) or 1 (projects only, money untouched).
+ * Full data dump. `GET /api/export` returns version 3.
+ * `POST /api/import` accepts 3 (replaces everything), 2 (projects + money, planner untouched)
+ * or 1 (projects only).
  */
 export const exportSchema = z
   .discriminatedUnion("version", [
     z.object({ version: z.literal(1), ...exportBase }),
     z.object({ version: z.literal(2), ...exportBase, money: moneyExportSchema }),
+    z.object({ version: z.literal(3), ...exportBase, money: moneyExportSchema, planner: plannerExportSchema }),
   ])
   .superRefine((data, ctx) => {
-    if (data.version === 2) checkMoneyReferences(data.money, ctx);
+    if (data.version === 2 || data.version === 3) checkMoneyReferences(data.money, ctx);
+    if (data.version === 3) checkPlannerReferences(data.planner, ctx);
     const ids = new Set<string>();
     const names = new Set<string>();
     for (const [i, p] of data.projects.entries()) {
@@ -176,3 +180,31 @@ export type ApiErrorBody = {
   error: { code: string; message: string; details?: unknown };
 };
 
+function checkPlannerReferences(p: PlannerExport, ctx: z.RefinementCtx) {
+  const issue = (path: (string | number)[], message: string) => ctx.addIssue({ code: "custom", path: ["planner", ...path], message });
+  const ids = new Set<string>();
+  const names = new Set<string>();
+  for (const [i, h] of p.habits.entries()) {
+    if (ids.has(h.id)) issue(["habits", i, "id"], `Duplicate habit id "${h.id}"`);
+    ids.add(h.id);
+    const key = normalizeName(h.name);
+    if (names.has(key)) issue(["habits", i, "name"], `Duplicate habit name "${h.name}"`);
+    names.add(key);
+  }
+  const checks = new Set<string>();
+  for (const [i, c] of p.habitChecks.entries()) {
+    if (!ids.has(c.habitId)) issue(["habitChecks", i, "habitId"], `Unknown habit id "${c.habitId}"`);
+    const key = `${c.habitId}|${c.period}`;
+    if (checks.has(key)) issue(["habitChecks", i], `Duplicate check for "${c.habitId}" on ${c.period}`);
+    checks.add(key);
+  }
+  const taskIds = new Set<string>();
+  const slots = new Set<string>();
+  for (const [i, t] of p.dayTasks.entries()) {
+    if (taskIds.has(t.id)) issue(["dayTasks", i, "id"], `Duplicate task id "${t.id}"`);
+    taskIds.add(t.id);
+    const slot = `${t.day}|${t.position}`;
+    if (slots.has(slot)) issue(["dayTasks", i, "position"], `Two tasks in position ${t.position} on ${t.day}`);
+    slots.add(slot);
+  }
+}

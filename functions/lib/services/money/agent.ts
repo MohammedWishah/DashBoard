@@ -38,7 +38,15 @@ export async function resolveCategory(db: Db, userId: string, requested: string)
       await updateCategory(db, userId, archived.id, { archived: false });
       return { ...archived, archived: false };
     }
-    return createCategory(db, userId, { name: OTHER_CATEGORY_NAME });
+    try {
+      return await createCategory(db, userId, { name: OTHER_CATEGORY_NAME });
+    } catch (err) {
+      // Another request created Other at the same moment: use that one.
+      if (!(err instanceof ApiError && err.code === "name_taken")) throw err;
+      const other = findCategoryByName(await listCategories(db, userId), OTHER_CATEGORY_NAME);
+      if (!other) throw err;
+      return other;
+    }
   }
 
   throw new ApiError(

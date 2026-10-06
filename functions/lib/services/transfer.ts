@@ -6,6 +6,7 @@ import {
   dayTasks,
   debtPayments,
   debts,
+  energyCheckins,
   expenses,
   habitChecks,
   habits,
@@ -16,6 +17,7 @@ import {
   savingsGoals,
   settings,
   shippedEvents,
+  wants,
 } from "../../../db/schema";
 import type { ExportData } from "../../../shared/schemas";
 import { nowIso } from "../../../shared/time";
@@ -36,7 +38,7 @@ function insertChunked<T extends SQLiteTable>(db: Db, table: T, rows: T["$inferI
 const strip = <T extends { userId: string }>(rows: T[]) => rows.map(({ userId: _owner, ...rest }) => rest);
 
 export async function exportAll(db: Db, userId: string): Promise<ExportData> {
-  const [p, e, s, cat, bill, exp, inc, goal, contrib, debt, pay, hab, chk, tsk] = await db.batch([
+  const [p, e, s, cat, bill, exp, inc, goal, contrib, debt, pay, hab, chk, tsk, wnt, nrg] = await db.batch([
     db.select().from(projects).where(eq(projects.userId, userId)),
     db.select().from(shippedEvents).where(eq(shippedEvents.userId, userId)),
     db.select().from(settings).where(eq(settings.userId, userId)),
@@ -51,6 +53,8 @@ export async function exportAll(db: Db, userId: string): Promise<ExportData> {
     db.select().from(habits).where(eq(habits.userId, userId)),
     db.select().from(habitChecks).where(eq(habitChecks.userId, userId)),
     db.select().from(dayTasks).where(eq(dayTasks.userId, userId)),
+    db.select().from(wants).where(eq(wants.userId, userId)),
+    db.select().from(energyCheckins).where(eq(energyCheckins.userId, userId)),
   ]);
   return {
     version: 3,
@@ -67,8 +71,9 @@ export async function exportAll(db: Db, userId: string): Promise<ExportData> {
       savingsContributions: strip(contrib),
       debts: strip(debt),
       debtPayments: strip(pay),
+      wants: strip(wnt),
     },
-    planner: { habits: strip(hab), habitChecks: strip(chk), dayTasks: strip(tsk) },
+    planner: { habits: strip(hab), habitChecks: strip(chk), dayTasks: strip(tsk), energy: strip(nrg) },
   };
 }
 
@@ -101,6 +106,8 @@ export async function importAll(db: Db, userId: string, data: ExportData) {
   ];
   if (data.version === 2 || data.version === 3) {
     // Children first so foreign keys never point at deleted rows.
+    // Wants are replaced only when the file has them (files from before the want list don't).
+    if (data.version === 3 && data.money.wants !== undefined) statements.push(db.delete(wants).where(eq(wants.userId, userId)));
     statements.push(
       db.delete(debtPayments).where(eq(debtPayments.userId, userId)),
       db.delete(savingsContributions).where(eq(savingsContributions.userId, userId)),
@@ -118,6 +125,7 @@ export async function importAll(db: Db, userId: string, data: ExportData) {
       db.delete(dayTasks).where(eq(dayTasks.userId, userId)),
       db.delete(habits).where(eq(habits.userId, userId)),
     );
+    if (data.planner.energy !== undefined) statements.push(db.delete(energyCheckins).where(eq(energyCheckins.userId, userId)));
   }
 
   statements.push(
@@ -148,13 +156,21 @@ export async function importAll(db: Db, userId: string, data: ExportData) {
       ...insertChunked(db, debts, m.debts.map((r) => ({ ...r, id: id(r.id), userId }))),
       ...insertChunked(db, debtPayments, m.debtPayments.map((r) => ({ ...r, id: id(r.id), debtId: id(r.debtId), userId }))),
     );
+    if (data.version === 3 && m.wants !== undefined) {
+      statements.push(...insertChunked(db, wants, m.wants.map((r) => ({ ...r, id: id(r.id), expenseId: r.expenseId ? id(r.expenseId) : null, userId }))));
+    }
   }
   if (data.version === 3) {
     const p = data.planner;
     statements.push(
-      ...insertChunked(db, habits, p.habits.map((r) => ({ ...r, id: id(r.id), userId }))),
+      ...insertChunked(
+        db,
+        habits,
+        p.habits.map((r) => ({ ...r, id: id(r.id), tiny: r.tiny ?? null, timeOfDay: r.timeOfDay ?? "any", archivedAt: r.archivedAt ?? null, userId })),
+      ),
       ...insertChunked(db, habitChecks, p.habitChecks.map((r) => ({ ...r, habitId: id(r.habitId), userId }))),
       ...insertChunked(db, dayTasks, p.dayTasks.map((r) => ({ ...r, id: id(r.id), userId }))),
+      ...insertChunked(db, energyCheckins, (p.energy ?? []).map((r) => ({ ...r, userId }))),
     );
   }
 
@@ -164,6 +180,10 @@ export async function importAll(db: Db, userId: string, data: ExportData) {
     shippedEvents: data.shippedEvents.length,
     settings: data.settings.length,
     ...((data.version === 2 || data.version === 3) && { expenses: data.money.expenses.length, bills: data.money.recurringBills.length }),
-    ...(data.version === 3 && { habits: data.planner.habits.length, habitChecks: data.planner.habitChecks.length }),
+    ...(data.version === 3 && {
+      habits: data.planner.habits.length,
+      habitChecks: data.planner.habitChecks.length,
+      wants: data.money.wants?.length ?? 0,
+    }),
   };
 }

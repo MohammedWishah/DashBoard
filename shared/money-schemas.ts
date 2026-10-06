@@ -212,6 +212,18 @@ export const paymentRowSchema = z.object({
   note: z.string().nullable(),
 });
 
+export const wantRowSchema = z.object({
+  id,
+  name: z.string().min(1).max(120),
+  priceCents: amount,
+  url: z.string().max(500).nullable(),
+  createdAt: ts,
+  readyAt: ts,
+  status: z.enum(["waiting", "bought", "skipped"]),
+  decidedAt: ts.nullable(),
+  expenseId: z.string().nullable(),
+});
+
 export const moneyExportSchema = z.object({
   categories: z.array(categoryRowSchema),
   recurringBills: z.array(billRowSchema),
@@ -221,6 +233,8 @@ export const moneyExportSchema = z.object({
   savingsContributions: z.array(contributionRowSchema),
   debts: z.array(debtRowSchema),
   debtPayments: z.array(paymentRowSchema),
+  // Optional so files exported before the want list existed still import.
+  wants: z.array(wantRowSchema).optional(),
 });
 export type MoneyExport = z.infer<typeof moneyExportSchema>;
 

@@ -73,7 +73,15 @@ export async function createCategory(db: Db, userId: string, input: CategoryCrea
     archived: false,
     createdAt: nowIso(),
   };
-  await db.insert(categories).values(row);
+  try {
+    await db.insert(categories).values(row);
+  } catch (err) {
+    // The unique (user, lower(name)) index caught a parallel insert of the same name.
+    if (/UNIQUE constraint failed/i.test(String(err))) {
+      throw new ApiError(409, "name_taken", `A category named "${input.name}" already exists`);
+    }
+    throw err;
+  }
   return row;
 }
 

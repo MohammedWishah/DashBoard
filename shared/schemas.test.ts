@@ -49,3 +49,29 @@ describe("export version 3", () => {
     expect(exportSchema.safeParse({ version: 2, ...base, money }).success).toBe(true);
   });
 });
+
+describe("export v3 additions", () => {
+  const want = { id: "w1", name: "Lamp", priceCents: 3990, url: null, createdAt: "2026-10-01T08:00:00.000Z", readyAt: "2026-10-02T08:00:00.000Z", status: "skipped", decidedAt: "2026-10-02T09:00:00.000Z", expenseId: null };
+  it("accepts wants and energy", () => {
+    const r = exportSchema.safeParse({
+      version: 3,
+      ...base,
+      money: { ...money, wants: [want] },
+      planner: { habits: [habit], habitChecks: [], dayTasks: [], energy: [{ day: "2026-10-05", level: "high", updatedAt: "2026-10-05T20:00:00.000Z" }] },
+    });
+    expect(r.success).toBe(true);
+  });
+  it("rejects a want pointing at an unknown expense", () => {
+    const r = exportSchema.safeParse({ version: 3, ...base, money: { ...money, wants: [{ ...want, expenseId: "nope" }] }, planner: { habits: [], habitChecks: [], dayTasks: [] } });
+    expect(r.success).toBe(false);
+  });
+  it("rejects a weekly check that isn't on a Monday", () => {
+    const r = exportSchema.safeParse({
+      version: 3,
+      ...base,
+      money,
+      planner: { habits: [habit], habitChecks: [{ habitId: "h1", period: "2026-10-06", createdAt: "2026-10-06T08:00:00.000Z" }], dayTasks: [] },
+    });
+    expect(r.success).toBe(false);
+  });
+});

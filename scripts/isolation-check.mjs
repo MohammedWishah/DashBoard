@@ -326,6 +326,18 @@ await owner("PATCH", `/admin/users/${bobMe.id}`, { extras: ["wins", "kind_streak
 check("Want list off: browser 403", (await bob("GET", "/money/wants")).status === 403);
 check("Want list off: agent 403", (await agent("POST", "/agent/money/wants", { name: "x", amount: 1 })).status === 403);
 await owner("PATCH", `/admin/users/${bobMe.id}`, { extras: ["wants", "wins", "kind_streaks", "nudges", "home_today"] });
+// ---- Other created on demand; archived categories aren't matched
+const bobCats2 = (await bob("GET", "/money/categories")).body.categories;
+const bobOther2 = bobCats2.find((c) => c.name === "Other");
+await bob("PATCH", `/money/categories/${bobOther2.id}`, { name: `Misc ${run}` });
+const newOther = await agent("POST", "/agent/money/expenses", { category: "Other", amount: 1 });
+check("Other is created when none exists", newOther.status === 201 && newOther.body?.expense?.category === "Other", JSON.stringify(newOther.body));
+await agent("DELETE", `/agent/money/expenses/${newOther.body?.expense?.id}`);
+const funCat = bobCats2.find((c) => c.name === "Fun");
+await bob("PATCH", `/money/categories/${funCat.id}`, { archived: true });
+check("archived non-Other category isn't matched (404)", (await agent("POST", "/agent/money/expenses", { category: "fun", amount: 1 })).status === 404);
+await bob("PATCH", `/money/categories/${funCat.id}`, { archived: false });
+check("duplicate category name in other case (409)", (await bob("POST", "/money/categories", { name: "FUN" })).status === 409);
 // ---- wins
 const wins = await bob("GET", "/planner/wins");
 check("Bob's wins count his own things", wins.status === 200 && wins.body.total >= 1 && wins.body.skipped.some((s) => s.name === "Lamp"), JSON.stringify(wins.body));
@@ -364,6 +376,7 @@ const imp3 = await bob("POST", "/import", bobExport3);
 check("version 3 import restores planner", imp3.status === 200 && imp3.body?.imported?.habits === 3, JSON.stringify(imp3.body));
 const bobHabitsAfter = (await bob("GET", "/planner/habits")).body.habits;
 check("imported habits got new ids", bobHabitsAfter.length === 3 && bobHabitsAfter.every((h) => h.id !== bobGym.body.habit.id && h.id !== bobRead.body.habit.id));
+check("export v3 carries wants and energy", Array.isArray(bobExport3.money?.wants) && Array.isArray(bobExport3.planner?.energy), JSON.stringify(Object.keys(bobExport3.money ?? {})));
 check("owner's habits untouched by Bob's import", (await owner("GET", "/planner/habits")).body.habits.some((h) => h.id === oh));
 
 console.log(failures === 0 ? "\nAll isolation checks passed." : `\n${failures} check(s) FAILED.`);

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { MAX_ACTIVE_PROJECTS, normalizeName } from "./rules";
 import { moneyExportSchema, type MoneyExport } from "./money-schemas";
+import { isValidPeriod } from "./planner";
 import { plannerExportSchema, type PlannerExport } from "./planner-schemas";
 
 export { MAX_ACTIVE_PROJECTS, normalizeName };
@@ -136,7 +137,7 @@ export type ExportData = z.infer<typeof exportSchema>;
 
 function checkMoneyReferences(m: MoneyExport, ctx: z.RefinementCtx) {
   const issue = (path: (string | number)[], message: string) => ctx.addIssue({ code: "custom", path: ["money", ...path], message });
-  const idsOf = (table: keyof MoneyExport) => {
+  const idsOf = (table: Exclude<keyof MoneyExport, "wants">) => {
     const seen = new Set<string>();
     for (const [i, row] of m[table].entries()) {
       if (seen.has(row.id)) issue([table, i, "id"], `Duplicate id "${row.id}" in ${table}`);
@@ -148,7 +149,7 @@ function checkMoneyReferences(m: MoneyExport, ctx: z.RefinementCtx) {
   const billIds = idsOf("recurringBills");
   const goalIds = idsOf("savingsGoals");
   const debtIds = idsOf("debts");
-  idsOf("expenses");
+  const expenseIds = idsOf("expenses");
   idsOf("income");
   idsOf("savingsContributions");
   idsOf("debtPayments");
@@ -174,6 +175,12 @@ function checkMoneyReferences(m: MoneyExport, ctx: z.RefinementCtx) {
   for (const [i, p] of m.debtPayments.entries()) {
     if (!debtIds.has(p.debtId)) issue(["debtPayments", i, "debtId"], `Unknown debt id "${p.debtId}"`);
   }
+  const wantIds = new Set<string>();
+  for (const [i, w] of (m.wants ?? []).entries()) {
+    if (wantIds.has(w.id)) issue(["wants", i, "id"], `Duplicate want id "${w.id}"`);
+    wantIds.add(w.id);
+    if (w.expenseId && !expenseIds.has(w.expenseId)) issue(["wants", i, "expenseId"], `Unknown expense id "${w.expenseId}"`);
+  }
 }
 
 export type ApiErrorBody = {
@@ -191,9 +198,12 @@ function checkPlannerReferences(p: PlannerExport, ctx: z.RefinementCtx) {
     if (names.has(key)) issue(["habits", i, "name"], `Duplicate habit name "${h.name}"`);
     names.add(key);
   }
+  const frequencyOf = new Map(p.habits.map((h) => [h.id, h.frequency]));
   const checks = new Set<string>();
   for (const [i, c] of p.habitChecks.entries()) {
     if (!ids.has(c.habitId)) issue(["habitChecks", i, "habitId"], `Unknown habit id "${c.habitId}"`);
+    const f = frequencyOf.get(c.habitId);
+    if (f && !isValidPeriod(f, c.period)) issue(["habitChecks", i, "period"], `Check on ${c.period} isn't a valid ${f} period`);
     const key = `${c.habitId}|${c.period}`;
     if (checks.has(key)) issue(["habitChecks", i], `Duplicate check for "${c.habitId}" on ${c.period}`);
     checks.add(key);
@@ -206,5 +216,10 @@ function checkPlannerReferences(p: PlannerExport, ctx: z.RefinementCtx) {
     const slot = `${t.day}|${t.position}`;
     if (slots.has(slot)) issue(["dayTasks", i, "position"], `Two tasks in position ${t.position} on ${t.day}`);
     slots.add(slot);
+  }
+  const energyDays = new Set<string>();
+  for (const [i, e] of (p.energy ?? []).entries()) {
+    if (energyDays.has(e.day)) issue(["energy", i, "day"], `Two energy check-ins on ${e.day}`);
+    energyDays.add(e.day);
   }
 }

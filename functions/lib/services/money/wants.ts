@@ -69,20 +69,22 @@ export async function buyWant(db: Db, userId: string, id: string, input: WantBuy
     .returning()
     .get();
   if (!claimed) throw new ApiError(409, "already_decided", `${w.name} was already decided`);
+  let expense;
   try {
-    const expense = await createExpense(db, userId, {
+    expense = await createExpense(db, userId, {
       categoryId: input.categoryId,
       amountCents: input.priceCents ?? w.priceCents,
       spentOn: input.spentOn ?? berlinToday(now),
       note: w.name,
     });
-    await db.update(wants).set({ expenseId: expense.id }).where(where(userId, id));
-    return { want: { ...strip(claimed), expenseId: expense.id }, expenseId: expense.id };
   } catch (err) {
-    // The category was wrong or gone: put the want back so it can be bought again.
+    // No expense was made (e.g. the category is gone): put the want back so it can be bought again.
     await db.update(wants).set({ status: "waiting", decidedAt: null }).where(where(userId, id));
     throw err;
   }
+  // The expense exists now, so the want stays bought even if this link fails.
+  await db.update(wants).set({ expenseId: expense.id }).where(where(userId, id));
+  return { want: { ...strip(claimed), expenseId: expense.id }, expenseId: expense.id };
 }
 
 export async function skipWant(db: Db, userId: string, id: string, now = new Date()): Promise<WantRow> {

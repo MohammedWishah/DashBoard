@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MAX_AMOUNT_CENTS, eurosToCents, type BarState, type PacePoint } from "./money";
+import { MAX_AMOUNT_CENTS, eurosToCents, type BarState, type NoteSuggestion, type PacePoint, type QuickPick } from "./money";
 
 const isRealDate = (s: string) => {
   const d = new Date(`${s}T00:00:00Z`);
@@ -244,6 +244,8 @@ export type ExpenseRow = z.infer<typeof expenseRowSchema>;
 export type IncomeRow = z.infer<typeof incomeRowSchema>;
 export type GoalRow = z.infer<typeof goalRowSchema>;
 export type DebtRow = z.infer<typeof debtRowSchema>;
+export type ContributionRow = z.infer<typeof contributionRowSchema>;
+export type PaymentRow = z.infer<typeof paymentRowSchema>;
 
 // ---- Responses ------------------------------------------------------------
 
@@ -297,4 +299,9 @@ export type MoneyLeft = {
   leftCents: number;
   categories: { name: string; leftCents: number }[];
   speech: string;
+};
+
+export type MoneySuggestions = {
+  quickPicks: (QuickPick & { categoryName: string })[];
+  notes: NoteSuggestion[];
 };

@@ -85,7 +85,17 @@ const stateStyle = {
   over: "bg-status-critical",
 } as const;
 
-export function CategoryRows({ categories, onManage }: { categories: CategorySummary[]; onManage: () => void }) {
+export function CategoryRows({
+  categories,
+  selectedId,
+  onSelect,
+  onManage,
+}: {
+  categories: CategorySummary[];
+  selectedId: string | null;
+  onSelect: (c: CategorySummary) => void;
+  onManage: () => void;
+}) {
   const anyLimit = categories.some((c) => c.monthlyLimitCents !== null);
   return (
     <section className={cn(panel, "grid content-start gap-1 p-5")}>
@@ -95,9 +105,9 @@ export function CategoryRows({ categories, onManage }: { categories: CategorySum
           {anyLimit ? "Edit limits" : "Set limits"}
         </Button>
       </header>
-      <ul className="grid gap-4">
+      <ul className="-mx-2 grid gap-1">
         {categories.map((c) => (
-          <CategoryRow key={c.id} c={c} />
+          <CategoryRow key={c.id} c={c} selected={c.id === selectedId} onSelect={() => onSelect(c)} />
         ))}
       </ul>
       {!anyLimit && (
@@ -107,47 +117,57 @@ export function CategoryRows({ categories, onManage }: { categories: CategorySum
   );
 }
 
-function CategoryRow({ c }: { c: CategorySummary }) {
+function CategoryRow({ c, selected, onSelect }: { c: CategorySummary; selected: boolean; onSelect: () => void }) {
   const limit = c.monthlyLimitCents;
   const pct = (n: number) => `${Math.min(100, (n / (limit ?? 1)) * 100)}%`;
   return (
-    <li className="grid gap-1.5">
-      <div className="flex items-baseline justify-between gap-3 text-sm">
-        <span className="font-medium">
-          {c.name}
-          {c.archived && <span className="ml-2 text-xs text-muted-foreground">archived</span>}
+    <li>
+      <button
+        type="button"
+        onClick={onSelect}
+        aria-pressed={selected}
+        className={cn(
+          "grid w-full gap-1.5 rounded-md px-2 py-2 text-left transition-colors hover:bg-accent/60 focus-visible:bg-accent/60 focus-visible:outline-none",
+          selected && "bg-accent/60",
+        )}
+      >
+        <span className="flex items-baseline justify-between gap-3 text-sm">
+          <span className="font-medium">
+            {c.name}
+            {c.archived && <span className="ml-2 text-xs text-muted-foreground">archived</span>}
+          </span>
+          <span className="tabular-nums text-muted-foreground">
+            <span className="text-foreground">{formatEuro(c.spentCents)}</span>
+            {limit !== null && ` of ${formatEuro(limit)}`}
+          </span>
         </span>
-        <span className="tabular-nums text-muted-foreground">
-          <span className="text-foreground">{formatEuro(c.spentCents)}</span>
-          {limit !== null && ` of ${formatEuro(limit)}`}
-        </span>
-      </div>
-      {limit !== null && (
-        <>
-          <div
-            className="relative h-1.5 overflow-hidden rounded-full bg-foreground/10"
-            role="meter"
-            aria-valuemin={0}
-            aria-valuemax={limit}
-            aria-valuenow={c.spentCents}
-            aria-label={`${c.name} spent`}
-          >
-            {/* Upcoming bills: lighter step of the same fill, after what's already spent */}
-            <div className={cn("absolute inset-y-0 left-0 rounded-full opacity-35", stateStyle[c.state])} style={{ width: pct(c.spentCents + c.upcomingCents) }} />
-            <div className={cn("absolute inset-y-0 left-0 rounded-full", stateStyle[c.state])} style={{ width: pct(c.spentCents) }} />
-          </div>
-          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            {c.state === "warn" && <Warning className="size-3.5 text-status-warning" weight="fill" />}
-            {c.state === "over" && <WarningOctagon className="size-3.5 text-status-critical" weight="fill" />}
-            <span>
-              <span className={cn(c.state !== "ok" && "text-foreground")}>
-                {c.leftCents! >= 0 ? `${formatEuro(c.leftCents!)} left` : `${formatEuro(-c.leftCents!)} over`}
+        {limit !== null && (
+          <>
+            <span
+              className="relative block h-1.5 overflow-hidden rounded-full bg-foreground/10"
+              role="meter"
+              aria-valuemin={0}
+              aria-valuemax={limit}
+              aria-valuenow={c.spentCents}
+              aria-label={`${c.name} spent`}
+            >
+              {/* Upcoming bills: lighter step of the same fill, after what's already spent */}
+              <span className={cn("absolute inset-y-0 left-0 rounded-full opacity-35", stateStyle[c.state])} style={{ width: pct(c.spentCents + c.upcomingCents) }} />
+              <span className={cn("absolute inset-y-0 left-0 rounded-full", stateStyle[c.state])} style={{ width: pct(c.spentCents) }} />
+            </span>
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              {c.state === "warn" && <Warning className="size-3.5 text-status-warning" weight="fill" />}
+              {c.state === "over" && <WarningOctagon className="size-3.5 text-status-critical" weight="fill" />}
+              <span>
+                <span className={cn(c.state !== "ok" && "text-foreground")}>
+                  {c.leftCents! >= 0 ? `${formatEuro(c.leftCents!)} left` : `${formatEuro(-c.leftCents!)} over`}
+                </span>
+                {c.upcomingCents > 0 && `, after ${formatEuro(c.upcomingCents)} in upcoming bills`}
               </span>
-              {c.upcomingCents > 0 && `, after ${formatEuro(c.upcomingCents)} in upcoming bills`}
-              </span>
-          </p>
-        </>
-      )}
+            </span>
+          </>
+        )}
+      </button>
     </li>
   );
 }

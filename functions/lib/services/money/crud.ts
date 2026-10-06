@@ -1,4 +1,4 @@
-import { and, count, eq, max } from "drizzle-orm";
+import { and, count, desc, eq, max } from "drizzle-orm";
 import {
   categories,
   debtPayments,
@@ -9,7 +9,7 @@ import {
   savingsContributions,
   savingsGoals,
 } from "../../../../db/schema";
-import { berlinToday } from "../../../../shared/money";
+import { berlinToday, loggedThroughAfterDayChange } from "../../../../shared/money";
 import type {
   BillCreate,
   BillUpdate,
@@ -196,13 +196,16 @@ export async function createBill(db: Db, userId: string, input: BillCreate) {
 }
 
 /** Changes apply to future due dates only; already-logged expenses keep their amount. */
-export async function updateBill(db: Db, userId: string, id: string, patch: BillUpdate) {
-  await getBill(db, userId, id);
+export async function updateBill(db: Db, userId: string, id: string, patch: BillUpdate, now = new Date()) {
+  const bill = await getBill(db, userId, id);
   if (patch.categoryId) await getCategory(db, userId, patch.categoryId);
-  if (isEmpty(patch)) return getBill(db, userId, id);
+  if (isEmpty(patch)) return bill;
+  // Moving the day after this month's bill already logged must not log it a second time.
+  const moved = patch.dayOfMonth !== undefined && patch.dayOfMonth !== bill.dayOfMonth;
+  const loggedThrough = moved ? loggedThroughAfterDayChange(bill.loggedThrough, berlinToday(now)) : bill.loggedThrough;
   return db
     .update(recurringBills)
-    .set(patch)
+    .set({ ...patch, loggedThrough })
     .where(and(eq(recurringBills.id, id), eq(recurringBills.userId, userId)))
     .returning()
     .get();
@@ -305,6 +308,21 @@ export async function addContribution(db: Db, userId: string, goalId: string, in
   return row;
 }
 
+export async function listContributions(db: Db, userId: string, goalId: string) {
+  await getGoal(db, userId, goalId);
+  return db
+    .select({
+      id: savingsContributions.id,
+      goalId: savingsContributions.goalId,
+      amountCents: savingsContributions.amountCents,
+      onDate: savingsContributions.onDate,
+      note: savingsContributions.note,
+    })
+    .from(savingsContributions)
+    .where(and(eq(savingsContributions.goalId, goalId), eq(savingsContributions.userId, userId)))
+    .orderBy(desc(savingsContributions.onDate));
+}
+
 export async function deleteContribution(db: Db, userId: string, id: string) {
   const row = await db
     .delete(savingsContributions)
@@ -356,6 +374,21 @@ export async function addPayment(db: Db, userId: string, debtId: string, input: 
   const row = { id: newId(), userId, debtId, amountCents: input.amountCents, paidOn: input.paidOn, note: input.note || null };
   await db.insert(debtPayments).values(row);
   return row;
+}
+
+export async function listPayments(db: Db, userId: string, debtId: string) {
+  await getDebt(db, userId, debtId);
+  return db
+    .select({
+      id: debtPayments.id,
+      debtId: debtPayments.debtId,
+      amountCents: debtPayments.amountCents,
+      paidOn: debtPayments.paidOn,
+      note: debtPayments.note,
+    })
+    .from(debtPayments)
+    .where(and(eq(debtPayments.debtId, debtId), eq(debtPayments.userId, userId)))
+    .orderBy(desc(debtPayments.paidOn));
 }
 
 export async function deletePayment(db: Db, userId: string, id: string) {

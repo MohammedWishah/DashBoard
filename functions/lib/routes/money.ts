@@ -21,6 +21,7 @@ import {
 import { getDb } from "../db";
 import type { AppEnv } from "../env";
 import * as crud from "../services/money/crud";
+import { getReview, getSuggestions } from "../services/money/insights";
 import { getCharts, getOverview, listExpenses } from "../services/money/overview";
 import { buyWant, createWant, deleteWant, listWants, skipWant } from "../services/money/wants";
 import { validate } from "../validate";
@@ -35,6 +36,10 @@ export const moneyRoutes = new Hono<AppEnv>()
   .get("/charts", validate("query", monthQuerySchema), async (c) =>
     c.json(await getCharts(db(c), c.get("userId"), c.req.valid("query").month)),
   )
+  .get("/review", validate("query", monthQuerySchema), async (c) =>
+    c.json(await getReview(db(c), c.get("userId"), c.req.valid("query").month)),
+  )
+  .get("/suggestions", async (c) => c.json(await getSuggestions(db(c), c.get("userId"))))
 
   .get("/categories", async (c) => c.json({ categories: await crud.listCategories(db(c), c.get("userId")) }))
   .post("/categories", validate("json", categoryCreateSchema), async (c) =>
@@ -93,6 +98,9 @@ export const moneyRoutes = new Hono<AppEnv>()
     await crud.deleteGoal(db(c), c.get("userId"), c.req.param("id"));
     return c.json(ok);
   })
+  .get("/goals/:id/contributions", async (c) =>
+    c.json({ contributions: await crud.listContributions(db(c), c.get("userId"), c.req.param("id")) }),
+  )
   .post("/goals/:id/contributions", validate("json", contributionCreateSchema), async (c) =>
     c.json({ contribution: await crud.addContribution(db(c), c.get("userId"), c.req.param("id"), c.req.valid("json")) }, 201),
   )
@@ -112,6 +120,9 @@ export const moneyRoutes = new Hono<AppEnv>()
     await crud.deleteDebt(db(c), c.get("userId"), c.req.param("id"));
     return c.json(ok);
   })
+  .get("/debts/:id/payments", async (c) =>
+    c.json({ payments: await crud.listPayments(db(c), c.get("userId"), c.req.param("id")) }),
+  )
   .post("/debts/:id/payments", validate("json", paymentCreateSchema), async (c) =>
     c.json({ payment: await crud.addPayment(db(c), c.get("userId"), c.req.param("id"), c.req.valid("json")) }, 201),
   )

@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { toast } from "sonner";
 import { ArrowDown, ArrowUp } from "@phosphor-icons/react";
 import { berlinToday, formatEuro, parseEuroToCents } from "@shared/money";
 import type { BillRow, CategoryRow } from "@shared/money-schemas";
@@ -8,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useBills, useCategories, useMoneyAction } from "@/hooks/money";
+import { useBills, useCategories, useMoneyAction, useMoneyUndo } from "@/hooks/money";
 import { ApiError } from "@/lib/api";
 import { moneyApi } from "@/lib/money-api";
 
@@ -83,6 +84,7 @@ function CategoriesTab() {
 }
 
 function CategoryEditor({ category, above, below }: { category: CategoryRow; above?: CategoryRow; below?: CategoryRow }) {
+  const [name, setName] = useState(category.name);
   const [limit, setLimit] = useState(category.monthlyLimitCents === null ? "" : String(category.monthlyLimitCents / 100));
   const [error, setError] = useState<string | null>(null);
   const update = useMoneyAction((patch: Parameters<typeof moneyApi.updateCategory>[1]) => moneyApi.updateCategory(category.id, patch));
@@ -100,6 +102,25 @@ function CategoryEditor({ category, above, below }: { category: CategoryRow; abo
     }
   }, `${category.name} removed`);
 
+  function saveName() {
+    setError(null);
+    const trimmed = name.trim();
+    if (!trimmed) {
+      setName(category.name);
+      return setError("A category needs a name");
+    }
+    if (trimmed === category.name) return;
+    update.mutate(
+      { name: trimmed },
+      {
+        onError: (err) => {
+          setName(category.name);
+          setError(err.message);
+        },
+      },
+    );
+  }
+
   function saveLimit() {
     setError(null);
     const trimmed = limit.trim();
@@ -111,7 +132,15 @@ function CategoryEditor({ category, above, below }: { category: CategoryRow; abo
   return (
     <li className="grid gap-1">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <span className="min-w-0 flex-1 basis-full truncate text-sm font-medium sm:basis-auto">{category.name}</span>
+        <Input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onBlur={saveName}
+          onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+          maxLength={80}
+          className="h-8 min-w-0 flex-1 basis-full font-medium sm:basis-auto"
+          aria-label={`Name of ${category.name}`}
+        />
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-muted-foreground">Limit €</span>
           <Input
@@ -168,7 +197,12 @@ function BillsTab() {
       ) : (
         <ul className="grid gap-2">
           {active.map((b) => (
-            <BillRowItem key={b.id} bill={b} categoryName={names.get(b.categoryId) ?? ""} />
+            <BillRowItem
+              key={b.id}
+              bill={b}
+              categoryName={names.get(b.categoryId) ?? ""}
+              categories={(categories.data ?? []).filter((c) => !c.archived || c.id === b.categoryId)}
+            />
           ))}
         </ul>
       )}
@@ -177,10 +211,21 @@ function BillsTab() {
   );
 }
 
-function BillRowItem({ bill, categoryName }: { bill: BillRow; categoryName: string }) {
-  const stop = useMoneyAction(() => moneyApi.stopBill(bill.id), `${bill.name} stopped`);
+function BillRowItem({ bill, categoryName, categories }: { bill: BillRow; categoryName: string; categories: CategoryRow[] }) {
+  const [editing, setEditing] = useState(false);
+  const undo = useMoneyUndo();
+  // The toast lives in the mutation itself: this row unmounts once the refetch drops the stopped bill.
+  const stop = useMoneyAction(async () => {
+    await moneyApi.stopBill(bill.id);
+    toast(`${bill.name} stopped`, {
+      action: { label: "Undo", onClick: () => undo(() => moneyApi.updateBill(bill.id, { active: true })) },
+    });
+  });
+  const stopBill = () => stop.mutate(undefined);
+
+  if (editing) return <EditBillForm bill={bill} categories={categories} onDone={() => setEditing(false)} />;
   return (
-    <li className="flex items-center gap-3 text-sm">
+    <li className="flex items-center gap-2 text-sm">
       <span className="min-w-0 flex-1">
         <span className="block truncate font-medium">{bill.name}</span>
         <span className="text-xs text-muted-foreground">
@@ -188,9 +233,89 @@ function BillRowItem({ bill, categoryName }: { bill: BillRow; categoryName: stri
         </span>
       </span>
       <span className="tabular-nums">{formatEuro(bill.amountCents)}</span>
-      <Button variant="ghost" size="sm" onClick={() => stop.mutate(undefined)} className="text-muted-foreground hover:text-destructive">
+      <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
+        Edit
+      </Button>
+      <Button variant="ghost" size="sm" onClick={stopBill} disabled={stop.isPending} className="text-muted-foreground hover:text-destructive">
         Stop
       </Button>
+    </li>
+  );
+}
+
+function EditBillForm({ bill, categories, onDone }: { bill: BillRow; categories: CategoryRow[]; onDone: () => void }) {
+  const [name, setName] = useState(bill.name);
+  const [amount, setAmount] = useState((bill.amountCents / 100).toFixed(2));
+  const [day, setDay] = useState(String(bill.dayOfMonth));
+  const [categoryId, setCategoryId] = useState(bill.categoryId);
+  const [error, setError] = useState<string | null>(null);
+  const save = useMoneyAction(
+    (patch: Parameters<typeof moneyApi.updateBill>[1]) => moneyApi.updateBill(bill.id, patch),
+    `${bill.name} updated`,
+  );
+  const id = (field: string) => `eb-${field}-${bill.id}`;
+
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    const cents = parseEuroToCents(amount);
+    const d = Number(day);
+    if (!name.trim()) return setError("Give the bill a name, like Rent");
+    if (cents === null) return setError("Enter an amount like 750");
+    if (!Number.isInteger(d) || d < 1 || d > 31) return setError("Day must be 1 to 31");
+    save.mutate(
+      { name: name.trim(), amountCents: cents, dayOfMonth: d, categoryId },
+      { onSuccess: onDone, onError: (err) => setError(err.message) },
+    );
+  }
+
+  return (
+    <li>
+      <form onSubmit={submit} className="grid gap-3 rounded-lg bg-muted/40 p-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-[1fr_7rem_5rem]">
+          <div className="col-span-2 grid gap-1.5 sm:col-span-1">
+            <Label htmlFor={id("name")}>Name</Label>
+            <Input id={id("name")} value={name} onChange={(e) => setName(e.target.value)} maxLength={80} autoFocus />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor={id("amount")}>Amount (€)</Label>
+            <Input id={id("amount")} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor={id("day")}>Day</Label>
+            <Input id={id("day")} inputMode="numeric" value={day} onChange={(e) => setDay(e.target.value)} />
+          </div>
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor={id("cat")}>Category</Label>
+          <Select value={categoryId} onValueChange={setCategoryId}>
+            <SelectTrigger id={id("cat")}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {categories.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <p className="text-xs text-muted-foreground">Changes apply from the next due date. Expenses already logged keep their amount.</p>
+        {error && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="ghost" size="sm" onClick={onDone}>
+            Cancel
+          </Button>
+          <Button type="submit" size="sm" disabled={save.isPending}>
+            Save
+          </Button>
+        </div>
+      </form>
     </li>
   );
 }

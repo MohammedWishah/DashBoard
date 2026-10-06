@@ -215,3 +215,130 @@ export function waitHours(priceCents: number): 24 | 72 | 168 {
   if (priceCents <= 20000) return 72;
   return 168;
 }
+
+/** Whole months from `fromMonth` to `toMonth`, counting both ends: Oct to Dec is 3. */
+export function monthsInclusive(fromMonth: string, toMonth: string): number {
+  const [fy, fm] = splitMonth(fromMonth);
+  const [ty, tm] = splitMonth(toMonth);
+  return (ty - fy) * 12 + (tm - fm) + 1;
+}
+
+/**
+ * What a goal needs per month to land on its date, counting this month.
+ * Null without a date, once reached, or when the date has passed.
+ */
+export function goalMonthlyNeed(g: { savedCents: number; targetCents: number; targetDate: string | null }, today: string): number | null {
+  if (!g.targetDate || g.targetDate < today || g.savedCents >= g.targetCents) return null;
+  const months = monthsInclusive(today.slice(0, 7), g.targetDate.slice(0, 7));
+  return Math.ceil((g.targetCents - g.savedCents) / months);
+}
+
+/**
+ * New logged_through when a bill moves to another day. If it already logged this month,
+ * the rest of this month counts as logged, so moving rent from the 1st to the 15th
+ * doesn't charge it twice in October. Otherwise nothing changes.
+ */
+export function loggedThroughAfterDayChange(loggedThrough: string | null, today: string): string | null {
+  const month = today.slice(0, 7);
+  if (!loggedThrough || loggedThrough.slice(0, 7) !== month) return loggedThrough;
+  return monthBounds(month).end;
+}
+
+// ---- Quick add suggestions ---------------------------------------------------
+
+export type ExpenseHabitRow = { categoryId: string; note: string | null; amountCents: number; count: number; lastOn: string };
+export type QuickPick = { categoryId: string; note: string | null; amountCents: number };
+export type NoteSuggestion = { note: string; categoryId: string };
+
+/** The expenses you log over and over (same category, note and amount, 3+ times): most frequent first. */
+export function pickQuickPicks(rows: ExpenseHabitRow[], limit = 3): QuickPick[] {
+  return rows
+    .filter((r) => r.count >= 3)
+    .sort((a, b) => b.count - a.count || b.lastOn.localeCompare(a.lastOn))
+    .slice(0, limit)
+    .map(({ categoryId, note, amountCents }) => ({ categoryId, note, amountCents }));
+}
+
+/** One suggestion per note (ignoring case), with the category it's used with most. Most used first. */
+export function noteSuggestions(rows: ExpenseHabitRow[]): NoteSuggestion[] {
+  const byNote = new Map<string, { note: string; total: number; lastOn: string; cats: Map<string, number> }>();
+  for (const r of rows) {
+    if (!r.note?.trim()) continue;
+    const key = normalizeName(r.note);
+    const entry = byNote.get(key) ?? { note: r.note.trim(), total: 0, lastOn: r.lastOn, cats: new Map() };
+    entry.total += r.count;
+    if (r.lastOn > entry.lastOn) entry.lastOn = r.lastOn;
+    entry.cats.set(r.categoryId, (entry.cats.get(r.categoryId) ?? 0) + r.count);
+    byNote.set(key, entry);
+  }
+  return [...byNote.values()]
+    .sort((a, b) => b.total - a.total || b.lastOn.localeCompare(a.lastOn))
+    .map((e) => ({ note: e.note, categoryId: [...e.cats.entries()].sort((a, b) => b[1] - a[1])[0][0] }));
+}
+
+/** Suggestions whose note contains what's typed (2+ letters), notes that start with it first. */
+export function matchNotes(suggestions: NoteSuggestion[], typed: string, limit = 3): NoteSuggestion[] {
+  const q = normalizeName(typed);
+  if (q.length < 2) return [];
+  const hits = suggestions.filter((s) => {
+    const n = normalizeName(s.note);
+    return n.includes(q) && n !== q;
+  });
+  const starts = hits.filter((s) => normalizeName(s.note).startsWith(q));
+  return [...starts, ...hits.filter((s) => !starts.includes(s))].slice(0, limit);
+}
+
+// ---- Month review --------------------------------------------------------------
+
+export type MonthReviewInput = {
+  month: string;
+  totals: MonthTotalsInput;
+  previousExpenseCents: number;
+  categories: { id: string; name: string; monthlyLimitCents: number | null; archived: boolean }[];
+  spentByCategory: Record<string, number>;
+  previousByCategory: Record<string, number>;
+  biggest: { categoryId: string; note: string | null; amountCents: number; spentOn: string } | null;
+  savedByWaitingCents: number;
+  expenseCount: number;
+};
+
+export type MonthReview = {
+  month: string;
+  totals: MonthTotalsInput & { leftCents: number };
+  /** Spent this month minus the month before: negative means less. Null when the month before has nothing. */
+  expenseDeltaCents: number | null;
+  topCategories: { categoryId: string; name: string; spentCents: number; previousCents: number }[];
+  /** Categories with a limit that stayed at or under it. */
+  limits: { kept: number; total: number };
+  biggest: { label: string; categoryName: string; amountCents: number; spentOn: string } | null;
+  savedByWaitingCents: number;
+  expenseCount: number;
+};
+
+export function monthReview(i: MonthReviewInput): MonthReview {
+  const names = new Map(i.categories.map((c) => [c.id, c.name]));
+  const name = (id: string) => names.get(id) ?? "Unknown";
+  const limited = i.categories.filter((c) => c.monthlyLimitCents !== null && (!c.archived || (i.spentByCategory[c.id] ?? 0) > 0));
+  return {
+    month: i.month,
+    totals: monthTotals(i.totals),
+    expenseDeltaCents: i.previousExpenseCents > 0 ? i.totals.expenseCents - i.previousExpenseCents : null,
+    topCategories: Object.entries(i.spentByCategory)
+      .filter(([, cents]) => cents > 0)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([id, cents]) => ({ categoryId: id, name: name(id), spentCents: cents, previousCents: i.previousByCategory[id] ?? 0 })),
+    limits: {
+      kept: limited.filter((c) => (i.spentByCategory[c.id] ?? 0) <= c.monthlyLimitCents!).length,
+      total: limited.length,
+    },
+    biggest: i.biggest && {
+      label: i.biggest.note || name(i.biggest.categoryId),
+      categoryName: name(i.biggest.categoryId),
+      amountCents: i.biggest.amountCents,
+      spentOn: i.biggest.spentOn,
+    },
+    savedByWaitingCents: i.savedByWaitingCents,
+    expenseCount: i.expenseCount,
+  };
+}

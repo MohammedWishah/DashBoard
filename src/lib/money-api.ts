@@ -6,23 +6,30 @@ import type {
   CategoryRow,
   CategoryUpdate,
   ContributionCreate,
+  ContributionRow,
   DebtCreate,
   DebtRow,
+  DebtUpdate,
   ExpenseCreate,
   ExpenseItem,
   ExpenseRow,
   ExpenseUpdate,
   GoalCreate,
   GoalRow,
+  GoalUpdate,
   IncomeCreate,
   IncomeRow,
+  IncomeUpdate,
   MoneyCharts,
   MoneyOverview,
+  MoneySuggestions,
   PaymentCreate,
+  PaymentRow,
   WantCreate,
   WantRow,
   WantsView,
 } from "@shared/money-schemas";
+import type { MonthReview } from "@shared/money";
 import { request } from "@/lib/api";
 
 const json = (data: unknown) => JSON.stringify(data);
@@ -31,6 +38,8 @@ const q = (month?: string) => (month ? `?month=${month}` : "");
 export const moneyApi = {
   overview: (month?: string) => request<MoneyOverview>(`/money/overview${q(month)}`),
   charts: (month?: string) => request<MoneyCharts>(`/money/charts${q(month)}`),
+  review: (month: string) => request<MonthReview>(`/money/review${q(month)}`),
+  suggestions: () => request<MoneySuggestions>("/money/suggestions"),
   expenses: (month?: string) => request<{ expenses: ExpenseItem[] }>(`/money/expenses${q(month)}`).then((r) => r.expenses),
 
   createExpense: (input: ExpenseCreate) =>
@@ -41,6 +50,8 @@ export const moneyApi = {
 
   createIncome: (input: IncomeCreate) =>
     request<{ income: IncomeRow }>("/money/income", { method: "POST", body: json(input) }).then((r) => r.income),
+  updateIncome: (id: string, patch: IncomeUpdate) =>
+    request<{ income: IncomeRow }>(`/money/income/${id}`, { method: "PATCH", body: json(patch) }).then((r) => r.income),
   deleteIncome: (id: string) => request<{ ok: true }>(`/money/income/${id}`, { method: "DELETE" }),
 
   categories: () => request<{ categories: CategoryRow[] }>("/money/categories").then((r) => r.categories),
@@ -61,15 +72,22 @@ export const moneyApi = {
 
   createGoal: (input: GoalCreate) =>
     request<{ goal: GoalRow }>("/money/goals", { method: "POST", body: json(input) }).then((r) => r.goal),
-  archiveGoal: (id: string) => request(`/money/goals/${id}`, { method: "PATCH", body: json({ archived: true }) }),
+  updateGoal: (id: string, patch: GoalUpdate) =>
+    request<{ goal: GoalRow }>(`/money/goals/${id}`, { method: "PATCH", body: json(patch) }).then((r) => r.goal),
+  contributions: (goalId: string) =>
+    request<{ contributions: ContributionRow[] }>(`/money/goals/${goalId}/contributions`).then((r) => r.contributions),
   addContribution: (goalId: string, input: ContributionCreate) =>
     request(`/money/goals/${goalId}/contributions`, { method: "POST", body: json(input) }),
+  deleteContribution: (id: string) => request<{ ok: true }>(`/money/contributions/${id}`, { method: "DELETE" }),
 
   createDebt: (input: DebtCreate) =>
     request<{ debt: DebtRow }>("/money/debts", { method: "POST", body: json(input) }).then((r) => r.debt),
-  archiveDebt: (id: string) => request(`/money/debts/${id}`, { method: "PATCH", body: json({ archived: true }) }),
+  updateDebt: (id: string, patch: DebtUpdate) =>
+    request<{ debt: DebtRow }>(`/money/debts/${id}`, { method: "PATCH", body: json(patch) }).then((r) => r.debt),
+  payments: (debtId: string) => request<{ payments: PaymentRow[] }>(`/money/debts/${debtId}/payments`).then((r) => r.payments),
   addPayment: (debtId: string, input: PaymentCreate) =>
     request(`/money/debts/${debtId}/payments`, { method: "POST", body: json(input) }),
+  deletePayment: (id: string) => request<{ ok: true }>(`/money/payments/${id}`, { method: "DELETE" }),
 
   wants: () => request<WantsView>("/money/wants"),
   createWant: (input: WantCreate) =>

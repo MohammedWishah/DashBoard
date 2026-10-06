@@ -1,12 +1,11 @@
 import { useRef, useState, type FormEvent } from "react";
-import { toast } from "sonner";
-import { berlinToday, formatEuro, parseEuroToCents } from "@shared/money";
+import { berlinToday, formatEuro, matchNotes, parseEuroToCents, type QuickPick } from "@shared/money";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Segmented } from "@/components/segmented";
-import { useAddExpense, useAddIncome, useCategories } from "@/hooks/money";
+import { useAddExpense, useAddIncome, useCategories, useSuggestions } from "@/hooks/money";
 import { cn } from "@/lib/utils";
 
 type Tab = "expense" | "income";
@@ -61,7 +60,9 @@ function QuickAddForm({
   amountRef: React.RefObject<HTMLInputElement | null>;
 }) {
   const categories = useCategories();
+  const suggestions = useSuggestions();
   const visible = (categories.data ?? []).filter((c) => !c.archived);
+  const visibleNames = new Map(visible.map((c) => [c.id, c.name]));
   const [amount, setAmount] = useState("");
   const [categoryId, setCategoryId] = useState<string | null>(readLastCategory);
   const [date, setDate] = useState(berlinToday());
@@ -71,6 +72,25 @@ function QuickAddForm({
   const addExpense = useAddExpense();
   const addIncome = useAddIncome();
   const selected = visible.find((c) => c.id === categoryId) ?? null;
+  const picks = tab === "expense" ? (suggestions.data?.quickPicks ?? []).filter((p) => visibleNames.has(p.categoryId)) : [];
+  const noteHits =
+    tab === "expense" ? matchNotes(suggestions.data?.notes ?? [], note).filter((n) => visibleNames.has(n.categoryId)) : [];
+
+  function remember(id: string) {
+    try {
+      localStorage.setItem(LAST_CATEGORY_KEY, id);
+    } catch {
+      /* storage unavailable; the default just won't stick */
+    }
+  }
+
+  /** One tap logs a usual expense on the chosen date. The toast offers Undo. */
+  function logPick(p: QuickPick) {
+    const name = visibleNames.get(p.categoryId)!;
+    remember(p.categoryId);
+    addExpense.mutate({ categoryId: p.categoryId, categoryName: name, amountCents: p.amountCents, spentOn: date || berlinToday(), note: p.note });
+    onDone();
+  }
 
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -80,15 +100,8 @@ function QuickAddForm({
 
     if (tab === "expense") {
       if (!selected) return setError("Pick a category");
-      try {
-        localStorage.setItem(LAST_CATEGORY_KEY, selected.id);
-      } catch {
-        /* storage unavailable; the default just won't stick */
-      }
-      addExpense.mutate(
-        { categoryId: selected.id, categoryName: selected.name, amountCents: cents, spentOn: date, note: note.trim() || null },
-        { onSuccess: () => toast.success(`${formatEuro(cents)} ${selected.name} added`) },
-      );
+      remember(selected.id);
+      addExpense.mutate({ categoryId: selected.id, categoryName: selected.name, amountCents: cents, spentOn: date, note: note.trim() || null });
     } else {
       if (!source.trim()) return setError("Add where the money came from");
       addIncome.mutate({ amountCents: cents, source: source.trim(), receivedOn: date, note: note.trim() || null });
@@ -112,6 +125,27 @@ function QuickAddForm({
           { value: "income", label: "Income" },
         ]}
       />
+
+      {picks.length > 0 && (
+        <div className="grid gap-2">
+          <p className="text-[13px] font-medium" id="qa-usual">
+            Usual <span className="font-normal text-muted-foreground">· one tap adds it</span>
+          </p>
+          <div className="flex flex-wrap gap-2" role="group" aria-labelledby="qa-usual">
+            {picks.map((p) => (
+              <button
+                key={`${p.categoryId}-${p.note}-${p.amountCents}`}
+                type="button"
+                onClick={() => logPick(p)}
+                className="flex h-9 items-center gap-1.5 rounded-full bg-secondary px-4 text-sm font-medium text-secondary-foreground shadow-[inset_0_0_0_1px_var(--border)] transition-colors outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/60"
+              >
+                {p.note ?? p.categoryName}
+                <span className="tabular-nums text-muted-foreground">{formatEuro(p.amountCents)}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-2">
         <Label htmlFor="qa-amount">Amount</Label>
@@ -173,9 +207,35 @@ function QuickAddForm({
         </div>
         <div className="grid gap-2">
           <Label htmlFor="qa-note">Note</Label>
-          <Input id="qa-note" value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder="Optional" />
+          <Input
+            id="qa-note"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            maxLength={500}
+            placeholder="Optional"
+            autoComplete="off"
+          />
         </div>
       </div>
+
+      {noteHits.length > 0 && (
+        <div className="-mt-2 flex flex-wrap gap-2" aria-label="Past notes">
+          {noteHits.map((n) => (
+            <button
+              key={n.note}
+              type="button"
+              onClick={() => {
+                setNote(n.note);
+                setCategoryId(n.categoryId);
+                setError(null);
+              }}
+              className="h-8 rounded-full px-3 text-xs font-medium text-muted-foreground shadow-[inset_0_0_0_1px_var(--border)] transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60"
+            >
+              <span className="text-foreground">{n.note}</span> · {visibleNames.get(n.categoryId)}
+            </button>
+          ))}
+        </div>
+      )}
 
       {error && (
         <p role="alert" className="text-sm text-destructive">

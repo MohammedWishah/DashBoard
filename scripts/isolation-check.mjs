@@ -140,6 +140,17 @@ for (const [name, fn] of attempts) {
   const r = await fn();
   check(`Bob can't ${name} (404)`, r.status === 404, `got ${r.status}`);
 }
+for (const [name, path] of [
+  ["read owner's goal history", `/money/goals/${ownerGoal.body?.goal?.id}/contributions`],
+  ["read owner's debt payments", `/money/debts/${ownerDebt.body?.debt?.id}/payments`],
+]) {
+  const r = await bob("GET", path);
+  check(`Bob can't ${name} (404)`, r.status === 404, `got ${r.status}`);
+}
+const bobReview = (await bob("GET", "/money/review?month=2026-10")).body;
+check("Bob's month review has none of the owner's money", bobReview.totals.expenseCents === 0 && bobReview.biggest === null, JSON.stringify(bobReview));
+const bobSuggest = (await bob("GET", "/money/suggestions")).body;
+check("Bob's quick add suggestions are his own", Array.isArray(bobSuggest.notes) && !bobSuggest.notes.some((n) => n.categoryId === ownerCat.body?.category?.id));
 const ownerAfter = (await owner("GET", "/projects")).body.projects.find((p) => p.id === pid);
 check("owner's project unchanged", ownerAfter?.nextAction === "Owner step");
 const ownerOverview = (await owner("GET", "/money/overview?month=2026-10")).body;

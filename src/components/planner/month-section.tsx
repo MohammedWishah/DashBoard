@@ -17,7 +17,7 @@ export function MonthSection({ month, currentMonth, onMonth }: { month: string; 
   const q = useMonth(month);
   const m = q.data;
   return (
-    <section className="grid gap-4" aria-labelledby="month-title">
+    <section className="grid min-w-0 gap-4" aria-labelledby="month-title">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 id="month-title" className="text-base font-semibold">
           Month
@@ -30,10 +30,10 @@ export function MonthSection({ month, currentMonth, onMonth }: { month: string; 
           <ChartSkeleton />
         </>
       ) : (
-        <div className={cn("grid gap-4", q.isPlaceholderData && "opacity-60")}>
+        <div className={cn("grid min-w-0 gap-4", q.isPlaceholderData && "opacity-60")}>
           <DailyGrid m={m} />
           <ProgressChart m={m} />
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid min-w-0 gap-4 lg:grid-cols-2">
             <WeeklyGrid m={m} />
             <MonthlyList m={m} />
           </div>
@@ -46,7 +46,7 @@ export function MonthSection({ month, currentMonth, onMonth }: { month: string; 
 
 function Card({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
   return (
-    <div className={cn(panel, "grid content-start gap-3 p-5")}>
+    <div className={cn(panel, "grid min-w-0 content-start gap-3 p-5")}>
       <div className="grid gap-0.5">
         <h3 className="text-sm font-semibold">{title}</h3>
         {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
@@ -127,6 +127,7 @@ function ProgressChart({ m }: { m: MonthView }) {
   const rows = m.dayPercents.map((d) => ({ day: Number(d.date.slice(8)), percent: d.percent }));
   return (
     <ChartCard
+      className="min-w-0"
       title="Daily progress"
       subtitle="Share of daily habits done each day"
       table={{ head: ["Day", "Done"], rows: m.dayPercents.filter((d) => d.percent !== null).map((d) => [format(parseISO(d.date), "d MMM"), `${d.percent}%`]) }}

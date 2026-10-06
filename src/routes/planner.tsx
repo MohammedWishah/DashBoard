@@ -14,7 +14,8 @@ export default function PlannerPage() {
   const [month, setMonth] = useState(currentMonth);
   const [manage, setManage] = useState(false);
   return (
-    <div className="grid gap-8">
+    // min-w-0 all the way down: the 31-day grid must scroll inside its card, not widen the page.
+    <div className="grid min-w-0 gap-8">
       <PageHeader title="Planner">
         <Button variant="ghost" size="sm" onClick={() => setManage(true)}>
           <GearSix />

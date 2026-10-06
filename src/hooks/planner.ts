@@ -65,25 +65,13 @@ export function useToggleCheck() {
 export function useSaveTasks() {
   const qc = useQueryClient();
   return useMutation({
+    // One queue for all top-3 saves, so they reach the server in the order they were made.
+    scope: { id: "planner-day-tasks" },
     mutationFn: ({ date, tasks }: { date: string; tasks: { text: string; done: boolean }[] }) => plannerApi.putTasks(date, tasks),
     onSuccess: (tasks, { date }) => qc.setQueryData<DayView>(plannerKeys.day(date), (d) => (d ? { ...d, tasks } : d)),
-    onError: (err) => toast.error(err.message),
-  });
-}
-
-export function useUpdateTask() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, done }: { id: string; done: boolean; date: string }) => plannerApi.updateTask(id, { done }),
-    onMutate: async ({ id, done, date }) => {
-      await qc.cancelQueries({ queryKey: plannerKeys.day(date) });
-      const previous = qc.getQueryData<DayView>(plannerKeys.day(date));
-      qc.setQueryData<DayView>(plannerKeys.day(date), (d) => (d ? { ...d, tasks: d.tasks.map((t) => (t.id === id ? { ...t, done } : t)) } : d));
-      return { previous };
-    },
-    onError: (err, { date }, ctx) => {
-      if (ctx?.previous) qc.setQueryData(plannerKeys.day(date), ctx.previous);
+    onError: (err, { date }) => {
       toast.error(err.message);
+      void qc.invalidateQueries({ queryKey: plannerKeys.day(date) });
     },
   });
 }

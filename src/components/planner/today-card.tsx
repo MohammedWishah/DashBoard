@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CaretLeft, CaretRight, Check, Fire } from "@phosphor-icons/react";
 import { format, parseISO } from "date-fns";
 import { MAX_DAY_TASKS, addDays } from "@shared/planner";
@@ -7,7 +7,7 @@ import { panel } from "@/components/money/summary";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useDay, useSaveTasks, useToggleCheck, useUpdateTask } from "@/hooks/planner";
+import { useDay, useSaveTasks, useToggleCheck } from "@/hooks/planner";
 import { cn } from "@/lib/utils";
 
 export function TodayCard({ date, today, onDate }: { date: string; today: string; onDate: (d: string) => void }) {
@@ -15,7 +15,7 @@ export function TodayCard({ date, today, onDate }: { date: string; today: string
   const d = day.data;
   const dailyDone = d ? d.habits.daily.filter((h) => h.checked).length : 0;
   return (
-    <section className={cn(panel, "grid gap-5 p-5")} aria-labelledby="today-title">
+    <section className={cn(panel, "grid min-w-0 gap-5 p-5")} aria-labelledby="today-title">
       <header className="flex flex-wrap items-center justify-between gap-2">
         <h2 id="today-title" className="text-base font-semibold">
           {date === today ? "Today" : format(parseISO(date), "EEEE")} · {format(parseISO(date), "d MMM")}
@@ -63,37 +63,53 @@ export function TodayCard({ date, today, onDate }: { date: string; today: string
 }
 
 function TopThree({ day }: { day: DayView }) {
+  // Typing and ticking both save the whole list through one queued mutation, so saves land in
+  // order and a tick never races an edit (the server re-creates rows on every save).
   const save = useSaveTasks();
-  const toggle = useUpdateTask();
+  const pending = useRef(false);
+  pending.current = save.isPending;
+  const savedKey = JSON.stringify(clean(slots(day)));
+  const lastSent = useRef(savedKey);
   const [drafts, setDrafts] = useState(() => slots(day));
-  // Reset only when the saved tasks change, so a background refetch (e.g. after ticking a habit)
-  // never wipes what the user is typing.
-  const savedKey = JSON.stringify(day.tasks.map((t) => [t.text, t.done]));
-  useEffect(() => setDrafts(slots(day)), [savedKey]);
+  // Take the server's list when it changes from elsewhere (e.g. Hermes), but never while our
+  // own saves are in flight: their echoes would wipe what the user is typing.
+  useEffect(() => {
+    if (pending.current) return;
+    lastSent.current = savedKey;
+    setDrafts(slots(day));
+  }, [savedKey]);
 
-  function commit() {
-    const tasks = drafts.filter((t) => t.text.trim()).map((t) => ({ text: t.text.trim(), done: t.done }));
-    const current = day.tasks.map((t) => ({ text: t.text, done: t.done }));
-    if (JSON.stringify(tasks) !== JSON.stringify(current)) save.mutate({ date: day.date, tasks });
+  function persist(next: Draft[]) {
+    const tasks = clean(next);
+    const key = JSON.stringify(tasks);
+    if (key === lastSent.current) return;
+    lastSent.current = key;
+    save.mutate({ date: day.date, tasks });
+  }
+
+  function setDone(i: number, done: boolean) {
+    const next = drafts.map((x, j) => (j === i ? { ...x, done } : x));
+    setDrafts(next);
+    persist(next);
   }
 
   return (
     <div className="grid content-start gap-2">
       <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Top 3</h3>
       {drafts.map((t, i) => {
-        const saved = day.tasks[i];
+        const text = t.text.trim();
         return (
           <div key={i} className="flex items-center gap-2">
             <TickBox
               checked={t.done}
-              disabled={!saved}
-              label={saved ? `Mark "${saved.text}" ${t.done ? "not done" : "done"}` : "Write a task first"}
-              onChange={(done) => saved && toggle.mutate({ id: saved.id, done, date: day.date })}
+              disabled={!text}
+              label={text ? `Mark "${text}" ${t.done ? "not done" : "done"}` : "Write a task first"}
+              onChange={(done) => setDone(i, done)}
             />
             <Input
               value={t.text}
               onChange={(e) => setDrafts((all) => all.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))}
-              onBlur={commit}
+              onBlur={() => persist(drafts)}
               onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
               placeholder={i === 0 ? "Most important thing today" : "Optional"}
               maxLength={200}
@@ -107,8 +123,13 @@ function TopThree({ day }: { day: DayView }) {
   );
 }
 
-const slots = (day: DayView) =>
+type Draft = { text: string; done: boolean };
+
+const slots = (day: DayView): Draft[] =>
   Array.from({ length: MAX_DAY_TASKS }, (_, i) => ({ text: day.tasks[i]?.text ?? "", done: day.tasks[i]?.done ?? false }));
+
+/** What gets saved: filled slots only, trimmed, in order. */
+const clean = (drafts: Draft[]) => drafts.filter((t) => t.text.trim()).map((t) => ({ text: t.text.trim(), done: t.done }));
 
 function HabitChecklist({ title, habits, date }: { title?: string; habits: DayHabit[]; date: string }) {
   const toggle = useToggleCheck();

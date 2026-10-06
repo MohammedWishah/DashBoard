@@ -1,4 +1,4 @@
-import type { DayTaskRow, DayView, HabitCreate, HabitRow, HabitUpdate, MonthView, TaskUpdate } from "@shared/planner-schemas";
+import type { DayTaskRow, DayView, HabitCreate, HabitRow, HabitUpdate, MonthView } from "@shared/planner-schemas";
 import { request } from "@/lib/api";
 
 const json = (data: unknown) => JSON.stringify(data);
@@ -16,6 +16,4 @@ export const plannerApi = {
   untick: (habitId: string, period: string) => request(`/planner/habits/${habitId}/checks/${period}`, { method: "DELETE" }),
   putTasks: (date: string, tasks: { text: string; done: boolean }[]) =>
     request<{ tasks: DayTaskRow[] }>(`/planner/day/${date}/tasks`, { method: "PUT", body: json({ tasks }) }).then((r) => r.tasks),
-  updateTask: (id: string, patch: TaskUpdate) =>
-    request<{ task: DayTaskRow }>(`/planner/tasks/${id}`, { method: "PATCH", body: json(patch) }).then((r) => r.task),
 };

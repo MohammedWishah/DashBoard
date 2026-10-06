@@ -9,6 +9,7 @@ export const plannerKeys = {
   day: (date: string) => ["planner", "day", date] as const,
   month: (month: string) => ["planner", "month", month] as const,
   habits: ["planner", "habits"] as const,
+  wins: (week: string) => ["planner", "wins", week] as const,
 };
 
 export const useDay = (date: string) =>
@@ -16,6 +17,9 @@ export const useDay = (date: string) =>
 
 export const useMonth = (month: string) =>
   useQuery({ queryKey: plannerKeys.month(month), queryFn: () => plannerApi.month(month), placeholderData: keepPreviousData });
+
+export const useWins = (week: string) =>
+  useQuery({ queryKey: plannerKeys.wins(week), queryFn: () => plannerApi.wins(week), placeholderData: keepPreviousData });
 
 export const useHabits = () => useQuery({ queryKey: plannerKeys.habits, queryFn: plannerApi.habits });
 

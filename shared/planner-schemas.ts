@@ -18,6 +18,7 @@ export const dayTasksPutSchema = z.object({
 });
 export const taskUpdateSchema = z.object({ text: taskText, done: z.boolean() }).partial().strict();
 export const dayQuerySchema = z.object({ date: dateSchema.optional() });
+export const weekQuerySchema = z.object({ week: dateSchema.optional() });
 
 export const agentHabitCheckSchema = z.object({ habit: habitName, date: dateSchema.optional() });
 export const agentTasksSchema = z.object({

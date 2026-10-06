@@ -1,10 +1,18 @@
 import { Hono } from "hono";
 import { dateSchema, monthQuerySchema } from "../../../shared/money-schemas";
-import { dayQuerySchema, dayTasksPutSchema, habitCreateSchema, habitUpdateSchema, taskUpdateSchema } from "../../../shared/planner-schemas";
+import {
+  dayQuerySchema,
+  dayTasksPutSchema,
+  habitCreateSchema,
+  habitUpdateSchema,
+  taskUpdateSchema,
+  weekQuerySchema,
+} from "../../../shared/planner-schemas";
 import { getDb } from "../db";
 import type { AppEnv } from "../env";
 import { ApiError } from "../errors";
 import * as planner from "../services/planner";
+import { getWins } from "../services/wins";
 import { validate } from "../validate";
 
 const db = (c: { env: AppEnv["Bindings"] }) => getDb(c.env.DB);
@@ -47,4 +55,13 @@ export const plannerRoutes = new Hono<AppEnv>()
   .delete("/habits/:id/checks/:period", async (c) => {
     const r = await planner.setCheck(db(c), c.get("userId"), c.req.param("id"), pathDate(c.req.param("period")), false);
     return c.json({ habitId: r.habit.id, period: r.period, checked: r.checked });
-  });
+  })
+  .get("/wins", validate("query", weekQuerySchema), async (c) =>
+    c.json(
+      await getWins(db(c), c.get("userId"), {
+        week: c.req.valid("query").week,
+        sections: c.get("features"),
+        extras: c.get("extras"),
+      }),
+    ),
+  );

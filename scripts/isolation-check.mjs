@@ -304,6 +304,14 @@ await owner("PATCH", `/admin/users/${bobMe.id}`, { extras: ["wins", "kind_streak
 check("Want list off: browser 403", (await bob("GET", "/money/wants")).status === 403);
 check("Want list off: agent 403", (await agent("POST", "/agent/money/wants", { name: "x", amount: 1 })).status === 403);
 await owner("PATCH", `/admin/users/${bobMe.id}`, { extras: ["wants", "wins", "kind_streaks", "nudges", "home_today"] });
+// ---- wins
+const wins = await bob("GET", "/planner/wins");
+check("Bob's wins count his own things", wins.status === 200 && wins.body.total >= 1 && wins.body.skipped.some((s) => s.name === "Lamp"), JSON.stringify(wins.body));
+check("Bob's wins never include the owner's", !JSON.stringify(wins.body).includes("Owner"));
+check("wins with a non-Monday week (400)", (await bob("GET", "/planner/wins?week=2026-10-06")).status === 400);
+await owner("PATCH", `/admin/users/${bobMe.id}`, { extras: ["wants", "kind_streaks", "nudges", "home_today"] });
+check("Wins off: 403", (await bob("GET", "/planner/wins")).status === 403);
+await owner("PATCH", `/admin/users/${bobMe.id}`, { extras: ["wants", "wins", "kind_streaks", "nudges", "home_today"] });
 check("Bob's agent can't see owner's habits", !JSON.stringify(plan.body).includes(`${oh}`));
 const bobExport3 = (await bob("GET", "/export")).body;
 check("export is version 3 with Bob's planner only", bobExport3.version === 3 && bobExport3.planner.habits.length === 2 && !JSON.stringify(bobExport3.planner).includes(`${oh}`), JSON.stringify(bobExport3.planner?.habits?.map((h) => h.name)));

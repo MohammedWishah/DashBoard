@@ -67,7 +67,11 @@ export async function getWins(
         .select({ day: expenses.spentOn })
         .from(expenses)
         .where(and(eq(expenses.userId, userId), between(expenses.spentOn, first, last), isNull(expenses.recurringBillId))),
-      db.select({ since: min(expenses.spentOn) }).from(expenses).where(eq(expenses.userId, userId)),
+      // Count from the first expense the person logged themselves; bills alone don't start it.
+      db
+        .select({ since: min(expenses.spentOn) })
+        .from(expenses)
+        .where(and(eq(expenses.userId, userId), isNull(expenses.recurringBillId))),
     ]);
     noSpend = noSpendDays(days, new Set(spent.map((s) => s.day)), today, firstEver[0]?.since ?? null);
   }

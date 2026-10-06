@@ -76,7 +76,8 @@ export function TopThree({ day }: { day: DayView }) {
   // Take the server's list when it changes from elsewhere (e.g. Hermes), but never while our
   // own saves are in flight: their echoes would wipe what the user is typing.
   useEffect(() => {
-    if (pending.current) return;
+    // Our own save coming back (or one still in flight): keep what the user is typing.
+    if (pending.current || savedKey === lastSent.current) return;
     lastSent.current = savedKey;
     setDrafts(slots(day));
   }, [savedKey]);

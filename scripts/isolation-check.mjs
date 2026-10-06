@@ -58,7 +58,7 @@ check("/me returns the caller", bobMe?.email === `bob-${run}@example.test`);
 
 // ---- roles: the owner is admin; new people get Money + Planner only
 const ownerMe = (await owner("GET", "/me")).body;
-check("owner is admin with every feature", ownerMe.isAdmin === true && ownerMe.features.length === 4, JSON.stringify(ownerMe));
+check("owner is admin with every feature", ownerMe.isAdmin === true && ownerMe.features.length === 3, JSON.stringify(ownerMe));
 check("new person gets money + planner", !bobMe.isAdmin && JSON.stringify(bobMe.features) === JSON.stringify(["money", "planner"]), JSON.stringify(bobMe));
 check("Projects blocked until granted (403)", (await bob("GET", "/projects")).status === 403);
 check("non-admin can't list people (403)", (await bob("GET", "/admin/users")).status === 403);

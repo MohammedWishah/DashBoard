@@ -206,3 +206,48 @@ export const debtPayments = sqliteTable(
   },
   (t) => [index("debt_payments_paid_on_idx").on(t.paidOn), index("debt_payments_user_idx").on(t.userId)],
 );
+
+// ---- Planner --------------------------------------------------------------
+// Dates are Berlin calendar dates (YYYY-MM-DD). A check's `period` is the date (daily),
+// that week's Monday (weekly) or the 1st of the month (monthly).
+
+export const habits = sqliteTable(
+  "habits",
+  {
+    id: text("id").primaryKey(),
+    userId: owner(),
+    name: text("name").notNull(),
+    frequency: text("frequency", { enum: ["daily", "weekly", "monthly"] }).notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+    archived: integer("archived", { mode: "boolean" }).notNull().default(false),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [index("habits_user_idx").on(t.userId)],
+);
+
+export const habitChecks = sqliteTable(
+  "habit_checks",
+  {
+    habitId: text("habit_id")
+      .notNull()
+      .references(() => habits.id, { onDelete: "cascade" }),
+    userId: owner(),
+    period: text("period").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.habitId, t.period] }), index("habit_checks_user_idx").on(t.userId)],
+);
+
+export const dayTasks = sqliteTable(
+  "day_tasks",
+  {
+    id: text("id").primaryKey(),
+    userId: owner(),
+    day: text("day").notNull(),
+    position: integer("position").notNull(),
+    text: text("text").notNull(),
+    done: integer("done", { mode: "boolean" }).notNull().default(false),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [uniqueIndex("day_tasks_user_day_position_unique").on(t.userId, t.day, t.position), index("day_tasks_user_idx").on(t.userId)],
+);

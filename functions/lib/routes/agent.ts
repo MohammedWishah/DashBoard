@@ -3,10 +3,12 @@ import { agentExpenseCreateSchema, agentWantBuySchema, agentWantCreateSchema, ag
 import { agentHabitCheckSchema, agentTaskDoneSchema, agentTasksSchema } from "../../../shared/planner-schemas";
 import { shipProjectSchema, updateProjectSchema } from "../../../shared/schemas";
 import { getDb } from "../db";
+import { ApiError } from "../errors";
 import type { AppEnv } from "../env";
 import { logAgentExpense, undoAgentExpense } from "../services/money/agent";
 import { getMoneyLeft } from "../services/money/overview";
 import { agentAddWant, agentBuyWant, agentSkipWant } from "../services/money/wants";
+import { getBriefing } from "../services/briefing";
 import { agentCheck, agentSetTasks, agentTaskDone, agentToday } from "../services/planner-agent";
 import { listProjects, resolveProjectRef, shipProject, updateProject } from "../services/projects";
 import { validate } from "../validate";
@@ -74,4 +76,16 @@ export const agentRoutes = new Hono<AppEnv>()
   )
   .post("/money/wants/buy", validate("json", agentWantBuySchema), async (c) =>
     c.json(await agentBuyWant(getDb(c.env.DB), c.get("userId"), c.req.valid("json"))),
-  );
+  )
+  // Hermes script jobs: an empty message means "say nothing".
+  .get("/briefing/:kind", async (c) => {
+    const kind = c.req.param("kind");
+    if (kind !== "morning" && kind !== "evening" && kind !== "weekly") {
+      throw new ApiError(400, "invalid_kind", "Use morning, evening or weekly");
+    }
+    const message = await getBriefing(getDb(c.env.DB), c.get("userId"), kind, {
+      sections: c.get("features"),
+      extras: c.get("extras"),
+    });
+    return c.json({ message });
+  });

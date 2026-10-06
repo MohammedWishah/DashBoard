@@ -312,6 +312,17 @@ check("wins with a non-Monday week (400)", (await bob("GET", "/planner/wins?week
 await owner("PATCH", `/admin/users/${bobMe.id}`, { extras: ["wants", "kind_streaks", "nudges", "home_today"] });
 check("Wins off: 403", (await bob("GET", "/planner/wins")).status === 403);
 await owner("PATCH", `/admin/users/${bobMe.id}`, { extras: ["wants", "wins", "kind_streaks", "nudges", "home_today"] });
+// ---- briefings
+const morning = await agent("GET", "/agent/briefing/morning");
+check("morning brief speaks", morning.status === 200 && morning.body.message.startsWith("Good morning."), JSON.stringify(morning.body));
+check("morning brief never mentions the owner", !morning.body.message.includes("Owner"));
+const weekly = await agent("GET", "/agent/briefing/weekly");
+check("weekly brief speaks", weekly.status === 200 && weekly.body.message.startsWith("Week in review"), JSON.stringify(weekly.body));
+check("unknown brief kind (400)", (await agent("GET", "/agent/briefing/noon")).status === 400);
+await owner("PATCH", `/admin/users/${bobMe.id}`, { extras: ["wants", "wins", "kind_streaks", "home_today"] });
+const silent = await agent("GET", "/agent/briefing/morning");
+check("nudges off: silent, not 403", silent.status === 200 && silent.body.message === "", JSON.stringify(silent.body));
+await owner("PATCH", `/admin/users/${bobMe.id}`, { extras: ["wants", "wins", "kind_streaks", "nudges", "home_today"] });
 check("Bob's agent can't see owner's habits", !JSON.stringify(plan.body).includes(`${oh}`));
 const bobExport3 = (await bob("GET", "/export")).body;
 check("export is version 3 with Bob's planner only", bobExport3.version === 3 && bobExport3.planner.habits.length === 2 && !JSON.stringify(bobExport3.planner).includes(`${oh}`), JSON.stringify(bobExport3.planner?.habits?.map((h) => h.name)));

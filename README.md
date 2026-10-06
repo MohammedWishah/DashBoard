@@ -46,9 +46,9 @@ Archived projects don't appear in any tab. They stay in the database and in expo
 
 - **Login:** everyone signs in with email + password. [Supabase Auth](https://supabase.com/docs/guides/auth) stores the passwords and sends the invite and reset emails. Supabase stores **no app data**; that all stays in Cloudflare D1.
 - **Invite only:** sign-ups are off. You invite people from the Supabase dashboard.
-- **Private data:** each person only ever sees their own projects and money. `scripts/isolation-check.mjs` proves it (53 checks).
+- **Private data:** each person only ever sees their own projects, money and planner. `scripts/isolation-check.mjs` proves it (100+ checks).
 - **Admin:** the person whose email is `OWNER_EMAIL`. They have every section, own the data from before accounts existed, and get a **People** page to choose what each person can use.
-- **Defaults:** new people get **Money** and **Planner**. **Projects** and **Habits** stay admin-only until you switch them on for someone. The API enforces this too, not just the menu.
+- **Defaults:** new people get **Money** and **Planner**. **Projects** stays admin-only until you switch it on for someone. (Habits live inside Planner.) The API enforces this too, not just the menu.
 
 ## Set up Supabase (login only)
 
@@ -191,9 +191,23 @@ All take and return integer cents and `YYYY-MM-DD` dates. `?month=YYYY-MM` defau
 | GET / POST | `/api/money/debts` | `{ name, startingBalanceCents, startedOn }` (PATCH / DELETE on `/:id`) |
 | POST | `/api/money/debts/:id/payments` | `{ amountCents, paidOn }`. DELETE `/api/money/payments/:id` |
 
+### Planner routes (signed-in user, Planner switched on)
+
+Dates are Berlin `YYYY-MM-DD`; weeks start on Monday. A check's period is the date (daily), the week's Monday (weekly) or the 1st (monthly).
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| GET | `/api/planner/day?date=` | `{ date, today, tasks, habits: { daily, weekly, monthly } }`, each habit with `checked` and `streak`. Defaults to today. |
+| PUT | `/api/planner/day/:date/tasks` | `{ tasks: [{ text, done? }] }`, at most 3, replaces the day's top 3 |
+| PATCH | `/api/planner/tasks/:id` | `{ text?, done? }` |
+| GET | `/api/planner/month?month=` | Daily grid, `dayPercents` for the chart, weekly grid, monthly list, `top` 10 |
+| GET / POST | `/api/planner/habits` | POST `{ name, frequency: "daily" \| "weekly" \| "monthly" }`. Names are unique per person (any case). Limits: 50 / 20 / 40 active. |
+| PATCH / DELETE | `/api/planner/habits/:id` | PATCH `{ name?, sortOrder?, archived? }`. DELETE removes the habit and its history. |
+| PUT / DELETE | `/api/planner/habits/:id/checks/:period` | Tick / untick. Wrong period key: 400. Future period: 400 `future_period`. Twice is a no-op. |
+
 ### Agent routes (voice assistant token)
 
-Create a token in the app: click your email (sidebar, or the person icon on phone) > **Voice assistant** > Create. It's shown once. The assistant then acts as you, with your sections: project routes need Projects, money routes need Money. Revoke a token there any time.
+Create a token in the app: click your email (sidebar, or the person icon on phone) > **Voice assistant** > Create. It's shown once. The assistant then acts as you, with your sections: project routes need Projects, money routes need Money, planner routes need Planner. Revoke a token there any time.
 
 `:ref` is a project id **or its name**, case-insensitive and URL-encoded. They call the same service functions as the browser routes, so the same rules apply.
 
@@ -293,7 +307,42 @@ curl -s -X DELETE "$BASE/api/agent/money/expenses/EXPENSE_ID" \
 # {"speech":"Removed €12.40 from Food."}
 ```
 
-To set it up in Hermes Agent, see [integrations/hermes/life-board-money](integrations/hermes/life-board-money/SKILL.md).
+**Today's plan** (top 3 and what's left to tick)
+
+```bash
+curl -s "$BASE/api/agent/planner/today" \
+  -H "Authorization: Bearer $TOKEN"
+# {..., "speech":"Top 3: Call the bank (done), Finish report. Habits left today: Gym. This week: Clean."}
+```
+
+**Tick a habit by name** (today, this week or this month, depending on the habit; `date` optional; DELETE unticks)
+
+```bash
+curl -s -X POST "$BASE/api/agent/planner/habits/check" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"habit":"gym"}'
+# {"habit":"Gym","frequency":"weekly","period":"2026-10-05","checked":true,"speech":"Ticked Gym for this week. 🔥 2 weeks."}
+```
+
+Unknown names return `404 unknown_habit` with `error.details.habits` (name and frequency).
+
+**Set the top 3** (replaces the day's list), then **mark one done** by text or position
+
+```bash
+curl -s -X PUT "$BASE/api/agent/planner/tasks" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"tasks":["Call the bank","Finish report"]}'
+
+curl -s -X POST "$BASE/api/agent/planner/tasks/done" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"task":"1"}'
+# {..., "speech":"Done: Call the bank. 1 of 2 done."}
+```
+
+To set it up in Hermes Agent, see [integrations/hermes/life-board](integrations/hermes/life-board/SKILL.md).
 
 Locally, use `BASE=http://127.0.0.1:8788` and a token created in your local app.
 

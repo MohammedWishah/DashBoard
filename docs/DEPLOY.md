@@ -97,4 +97,6 @@ The backend and frontend are set up separately because they run in different pla
 
 ## Hermes Agent (Telegram)
 
-Log spending by message or voice note: see `integrations/hermes/life-board-money/SKILL.md`. Copy that folder to `~/.hermes/skills/` and put `LIFE_BOARD_URL` and `LIFE_BOARD_TOKEN` in `~/.hermes/.env`.
+Log spending and run the planner by message or voice note: see `integrations/hermes/life-board/SKILL.md`. Copy that folder to `~/.hermes/skills/` and put `LIFE_BOARD_URL` and `LIFE_BOARD_TOKEN` in `~/.hermes/.env`.
+
+If you installed the older `life-board-money` folder, delete it from `~/.hermes/skills/` and copy this one in its place. The `.env` values stay the same.

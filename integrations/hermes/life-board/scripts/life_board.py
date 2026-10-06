@@ -4,6 +4,10 @@
   life_board.py log --category Food --amount 12.40 [--note "Lidl"] [--date 2026-10-05]
   life_board.py undo EXPENSE_ID
   life_board.py left
+  life_board.py plan
+  life_board.py check --habit Gym [--date 2026-10-05]     (uncheck to undo)
+  life_board.py top3 "Call the bank" "Finish report" [--date ...]
+  life_board.py done --task "Call the bank"              (or --task 2)
 
 Reads LIFE_BOARD_URL and LIFE_BOARD_TOKEN from the environment. Prints the JSON reply.
 Exit code 0 on success, 1 on an API error (the JSON error is still printed), 2 on setup errors.
@@ -50,7 +54,7 @@ def call(method, path, body=None):
 
 
 def main():
-    p = argparse.ArgumentParser(description="Life Board money client")
+    p = argparse.ArgumentParser(description="Life Board client (money and planner)")
     sub = p.add_subparsers(dest="cmd", required=True)
     log = sub.add_parser("log")
     log.add_argument("--category", required=True)
@@ -60,7 +64,23 @@ def main():
     undo = sub.add_parser("undo")
     undo.add_argument("id")
     sub.add_parser("left")
+    sub.add_parser("plan")
+    for name in ("check", "uncheck"):
+        c = sub.add_parser(name)
+        c.add_argument("--habit", required=True)
+        c.add_argument("--date", help="YYYY-MM-DD, default today")
+    top3 = sub.add_parser("top3")
+    top3.add_argument("tasks", nargs="+", help="1 to 3 tasks, each quoted")
+    top3.add_argument("--date")
+    done = sub.add_parser("done")
+    done.add_argument("--task", required=True, help="task text, or 1-3 for its position")
+    done.add_argument("--date")
     a = p.parse_args()
+
+    def dated(body):
+        if getattr(a, "date", None):
+            body["date"] = a.date
+        return body
 
     if a.cmd == "log":
         body = {"category": a.category, "amount": a.amount}
@@ -71,9 +91,16 @@ def main():
         call("POST", "/money/expenses", body)
     elif a.cmd == "undo":
         call("DELETE", f"/money/expenses/{urllib.parse.quote(a.id, safe='')}")
-    else:
+    elif a.cmd == "left":
         call("GET", "/money/left")
-
+    elif a.cmd == "plan":
+        call("GET", "/planner/today")
+    elif a.cmd in ("check", "uncheck"):
+        call("POST" if a.cmd == "check" else "DELETE", "/planner/habits/check", dated({"habit": a.habit}))
+    elif a.cmd == "top3":
+        call("PUT", "/planner/tasks", dated({"tasks": a.tasks}))
+    else:
+        call("POST", "/planner/tasks/done", dated({"task": a.task}))
 
 if __name__ == "__main__":
     main()

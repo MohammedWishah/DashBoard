@@ -25,6 +25,7 @@ required_environment_variables:
 - The user asks how much money is left this month.
 - The user reports doing a habit ("did gym", "read today", "cleaned this week") or undoing one.
 - The user sets or updates today's top 3, marks one done, or asks for today's plan.
+- The user wants to buy something ("I want AirPods, 200") — put it on the want list instead of logging it — or decides on a waiting item ("skip the AirPods", "bought the AirPods").
 
 ## Procedure
 
@@ -91,6 +92,27 @@ python3 ${HERMES_SKILL_DIR}/scripts/life_board.py plan
 
 Reply with `speech` every time.
 
+### Want list
+
+When the user *wants* something (hasn't bought it), add it. It waits 1, 3 or 7 days by price:
+
+```
+python3 ${HERMES_SKILL_DIR}/scripts/life_board.py want --name "AirPods" --amount 200
+```
+
+When they decide:
+
+```
+python3 ${HERMES_SKILL_DIR}/scripts/life_board.py want-skip --name "AirPods"
+python3 ${HERMES_SKILL_DIR}/scripts/life_board.py want-buy --name "AirPods" --category "Fun"
+```
+
+On `unknown_want`, read `error.details.wants` and pick the matching name, or ask. A `403 extra_disabled` means the Want list is switched off. Then tell the user it can be turned on in Life Board → People → Extras.
+
+### Nudges
+
+Morning, evening and weekly messages come from three script jobs, not from you. If the user asks to change their times, use `hermes cron edit` on `life-board-morning`, `life-board-evening` or `life-board-weekly`. To see a brief now: `life_board.py brief morning`.
+
 ## Pitfalls
 
 - `--amount` is euros, never cents. "fifty" is `50`; "twelve forty" is `12.40`. At most 2 decimals.
@@ -100,6 +122,7 @@ Reply with `speech` every time.
 - After a `no_reply` error, never log again on your own: the expense may already be saved. Tell the user and let them check Life Board or tell you to retry. After `unreachable`, nothing was sent, so one retry is fine.
 - If the reply names a date ("… on 2026-10-05"), make sure it's the day the user meant. If it isn't, undo and log again with the right `--date`.
 - `top3` replaces the whole list. To add one task to an existing list, run `plan` first and send all tasks together (at most 3).
+- If the user already bought something, log it as an expense (`log`), not a want.
 - Never print or repeat the token.
 
 ## Verification

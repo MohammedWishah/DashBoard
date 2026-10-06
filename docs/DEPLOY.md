@@ -100,3 +100,18 @@ The backend and frontend are set up separately because they run in different pla
 Log spending and run the planner by message or voice note: see `integrations/hermes/life-board/SKILL.md`. Copy that folder to `~/.hermes/skills/` and put `LIFE_BOARD_URL` and `LIFE_BOARD_TOKEN` in `~/.hermes/.env`.
 
 If you installed the older `life-board-money` folder, delete it from `~/.hermes/skills/` and copy this one in its place. The `.env` values stay the same.
+
+### Nudges (optional)
+
+1. In Life Board → **People** → **Extras**, switch on **Hermes nudges** for yourself (and any other extras you want).
+2. Copy the three files in `integrations/hermes/life-board/cron/` to `~/.hermes/scripts/`.
+3. Create the jobs (one message each in a terminal on the Hermes machine):
+   ```
+   hermes cron create "0 8 * * *"  --no-agent --script life_board_morning.py --deliver telegram --name life-board-morning
+   hermes cron create "0 21 * * *" --no-agent --script life_board_evening.py --deliver telegram --name life-board-evening
+   hermes cron create "0 19 * * 0" --no-agent --script life_board_weekly.py  --deliver telegram --name life-board-weekly
+   ```
+4. Times follow the clock of the machine Hermes runs on. Check with `date`; if it isn't Berlin time, shift the hours.
+5. Test now: `hermes cron run life-board-morning` (or ask Hermes "run my life-board-morning job now").
+
+The scripts read `LIFE_BOARD_URL` and `LIFE_BOARD_TOKEN` from `~/.hermes/.env` themselves, so no Hermes config change is needed. Evening stays silent when everything is done.

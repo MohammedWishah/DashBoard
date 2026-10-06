@@ -49,6 +49,7 @@ Archived projects don't appear in any tab. They stay in the database and in expo
 - **Private data:** each person only ever sees their own projects, money and planner. `scripts/isolation-check.mjs` proves it (100+ checks).
 - **Admin:** the person whose email is `OWNER_EMAIL`. They have every section, own the data from before accounts existed, and get a **People** page to choose what each person can use.
 - **Defaults:** new people get **Money** and **Planner**. **Projects** stays admin-only until you switch it on for someone. (Habits live inside Planner.) The API enforces this too, not just the menu.
+- **Extras:** small optional helpers, **off for everyone by default** (the admin too). Switch them on per person on People: *Today on Home*, *Forgiving streaks* (one missed day doesn't break a streak), *Wins* (this week's finished things), *Want list* (a cooling-off queue for impulse buys: under €50 waits a day, up to €200 three days, more a week) and *Hermes nudges* (morning, evening and Sunday messages). An extra only works while its section is on.
 
 ## Set up Supabase (login only)
 
@@ -190,6 +191,9 @@ All take and return integer cents and `YYYY-MM-DD` dates. `?month=YYYY-MM` defau
 | POST | `/api/money/goals/:id/contributions` | `{ amountCents, onDate }`, negative to take money out. DELETE `/api/money/contributions/:id` |
 | GET / POST | `/api/money/debts` | `{ name, startingBalanceCents, startedOn }` (PATCH / DELETE on `/:id`) |
 | POST | `/api/money/debts/:id/payments` | `{ amountCents, paidOn }`. DELETE `/api/money/payments/:id` |
+| GET / POST | `/api/money/wants` | Want list extra. GET `{ waiting, decided, savedCents }`; POST `{ name, priceCents, url? }` |
+| POST | `/api/money/wants/:id/buy` | `{ categoryId, spentOn?, priceCents? }` logs the expense. Twice: 409. |
+| POST / DELETE | `/api/money/wants/:id/skip`, `/api/money/wants/:id` | Skip (counts as saved) / remove a mistake |
 
 ### Planner routes (signed-in user, Planner switched on)
 
@@ -203,7 +207,8 @@ Dates are Berlin `YYYY-MM-DD`; weeks start on Monday. A check's period is the da
 | GET | `/api/planner/month?month=` | Daily grid, `dayPercents` for the chart, weekly grid, monthly list, `top` 10 |
 | GET / POST | `/api/planner/habits` | POST `{ name, frequency: "daily" \| "weekly" \| "monthly" }`. Names are unique per person (any case). Limits: 50 / 20 / 40 active. |
 | PATCH / DELETE | `/api/planner/habits/:id` | PATCH `{ name?, sortOrder?, archived? }`. DELETE removes the habit and its history. |
-| PUT / DELETE | `/api/planner/habits/:id/checks/:period` | Tick / untick. Wrong period key: 400. Future period: 400 `future_period`. Twice is a no-op. |
+| PUT / DELETE | `/api/planner/habits/:id/checks/:period` | Tick / untick. Wrong period key: 400. Future period: 400 `future_period`. Archived habit: 409. Twice is a no-op. |
+| GET | `/api/planner/wins?week=` | Wins extra. The week's finished top-3 tasks, habit ticks, shipped projects, no-spend days and skipped buys, with a `total`. `week` is a Monday. |
 
 ### Agent routes (voice assistant token)
 
@@ -340,6 +345,27 @@ curl -s -X POST "$BASE/api/agent/planner/tasks/done" \
   -H "Content-Type: application/json" \
   -d '{"task":"1"}'
 # {..., "speech":"Done: Call the bank. 1 of 2 done."}
+```
+
+**Want list** (Want list extra; `amount` is euros, `"12,40"` works too)
+
+```bash
+curl -s -X POST "$BASE/api/agent/money/wants" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"AirPods","amount":200}'
+# {..., "speech":"Added AirPods (€200.00) to your want list. Ask me again in 3 days."}
+```
+
+`POST /api/agent/money/wants/skip` takes `{ "name" }`; `POST /api/agent/money/wants/buy` takes `{ "name", "category", "amount"? }`. Unknown names: `404 unknown_want` with `error.details.wants`.
+
+**Briefing** for Hermes nudge scripts (`morning`, `evening` or `weekly`). An empty `message` means "say nothing", also when the nudges extra is off.
+
+```bash
+curl -s "$BASE/api/agent/briefing/morning" \
+  -H "Authorization: Bearer $TOKEN"
+# {"message":"Good morning. Top 3: not set yet — reply \"top 3: …\".
+Habits today: Read, Water."}
 ```
 
 To set it up in Hermes Agent, see [integrations/hermes/life-board](integrations/hermes/life-board/SKILL.md).

@@ -8,6 +8,10 @@
   life_board.py check --habit Gym [--date 2026-10-05]     (uncheck to undo)
   life_board.py top3 "Call the bank" "Finish report" [--date ...]
   life_board.py done --task "Call the bank"              (or --task 2)
+  life_board.py brief morning|evening|weekly
+  life_board.py want --name AirPods --amount 200
+  life_board.py want-skip --name AirPods
+  life_board.py want-buy --name AirPods --category Fun [--amount 189]
 
 Reads LIFE_BOARD_URL and LIFE_BOARD_TOKEN from the environment. Prints the JSON reply.
 Exit code 0 on success, 1 on an API error (the JSON error is still printed), 2 on setup errors.
@@ -80,6 +84,17 @@ def main():
     done = sub.add_parser("done")
     done.add_argument("--task", required=True, help="task text, or 1-3 for its position")
     done.add_argument("--date")
+    brief = sub.add_parser("brief")
+    brief.add_argument("kind", choices=["morning", "evening", "weekly"])
+    want = sub.add_parser("want")
+    want.add_argument("--name", required=True)
+    want.add_argument("--amount", required=True, type=euros)
+    want_skip = sub.add_parser("want-skip")
+    want_skip.add_argument("--name", required=True)
+    want_buy = sub.add_parser("want-buy")
+    want_buy.add_argument("--name", required=True)
+    want_buy.add_argument("--category", required=True)
+    want_buy.add_argument("--amount", type=euros)
     a = p.parse_args()
 
     def dated(body):
@@ -104,6 +119,17 @@ def main():
         call("POST" if a.cmd == "check" else "DELETE", "/planner/habits/check", dated({"habit": a.habit}))
     elif a.cmd == "top3":
         call("PUT", "/planner/tasks", dated({"tasks": a.tasks}))
+    elif a.cmd == "brief":
+        call("GET", f"/briefing/{a.kind}")
+    elif a.cmd == "want":
+        call("POST", "/money/wants", {"name": a.name, "amount": a.amount})
+    elif a.cmd == "want-skip":
+        call("POST", "/money/wants/skip", {"name": a.name})
+    elif a.cmd == "want-buy":
+        body = {"name": a.name, "category": a.category}
+        if a.amount is not None:
+            body["amount"] = a.amount
+        call("POST", "/money/wants/buy", body)
     else:
         call("POST", "/planner/tasks/done", dated({"task": a.task}))
 

@@ -6,7 +6,8 @@ import { useQuickAdd } from "@/components/app-shell";
 import { panel } from "@/components/money/summary";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useMe } from "@/hooks/me";
+import { HomeToday } from "@/components/planner/home-today";
+import { useHasExtra, useMe } from "@/hooks/me";
 import { useOverview } from "@/hooks/money";
 import { useProjects } from "@/hooks/queries";
 import { cn } from "@/lib/utils";
@@ -15,6 +16,8 @@ export default function HomePage() {
   const me = useMe().data;
   const hasMoney = Boolean(me?.features.includes("money"));
   const hasProjects = Boolean(me?.features.includes("projects"));
+  const hasPlanner = Boolean(me?.features.includes("planner"));
+  const showToday = useHasExtra("home_today");
   const overview = useOverview(berlinMonth(), hasMoney);
   const projects = useProjects(hasProjects);
   const quickAdd = useQuickAdd();
@@ -34,11 +37,13 @@ export default function HomePage() {
         )}
       </div>
 
-      {me && !hasMoney && !hasProjects && (
+      {me && !hasMoney && !hasProjects && !hasPlanner && (
         <p className={cn(panel, "p-6 text-sm text-muted-foreground")}>
           Nothing is switched on for you yet. Ask the admin.
         </p>
       )}
+
+      {showToday && <HomeToday />}
 
       <div className="grid gap-4 md:grid-cols-5">
         {/* Money: the one hero figure on this screen */}

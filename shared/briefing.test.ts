@@ -13,6 +13,9 @@ const base: BriefingInput = {
   wins: null,
   leftCents: null,
   savedCents: null,
+  timeOfDay: false,
+  energyAsk: false,
+  insight: null,
 };
 
 describe("morningMessage", () => {
@@ -20,10 +23,10 @@ describe("morningMessage", () => {
     const m = morningMessage({
       ...base,
       daily: [
-        { name: "Read", checked: false, streak: 3, atRisk: false, frequency: "daily" },
-        { name: "Water", checked: true, streak: 1, atRisk: false, frequency: "daily" },
+        { name: "Read", checked: false, streak: 3, atRisk: false, frequency: "daily", timeOfDay: "any" },
+        { name: "Water", checked: true, streak: 1, atRisk: false, frequency: "daily", timeOfDay: "any" },
       ],
-      weekly: [{ name: "Gym", checked: false, streak: 0, atRisk: false, frequency: "weekly" }],
+      weekly: [{ name: "Gym", checked: false, streak: 0, atRisk: false, frequency: "weekly", timeOfDay: "any" }],
       bills: [
         { name: "Rent", amountCents: 90000, dueOn: "2026-10-07" },
         { name: "Phone", amountCents: 2000, dueOn: "2026-10-06" },
@@ -55,7 +58,7 @@ describe("eveningMessage", () => {
       eveningMessage({
         ...base,
         tasks: [{ text: "A", done: true }],
-        daily: [{ name: "Read", checked: true, streak: 4, atRisk: false, frequency: "daily" }],
+        daily: [{ name: "Read", checked: true, streak: 4, atRisk: false, frequency: "daily", timeOfDay: "any" }],
       }),
     ).toBe("");
   });
@@ -65,10 +68,10 @@ describe("eveningMessage", () => {
         ...base,
         tasks: [{ text: "Report", done: false }],
         daily: [
-          { name: "Read", checked: false, streak: 12, atRisk: true, frequency: "daily" },
-          { name: "Water", checked: false, streak: 0, atRisk: false, frequency: "daily" },
+          { name: "Read", checked: false, streak: 12, atRisk: true, frequency: "daily", timeOfDay: "any" },
+          { name: "Water", checked: false, streak: 0, atRisk: false, frequency: "daily", timeOfDay: "any" },
         ],
-        weekly: [{ name: "Gym", checked: false, streak: 3, atRisk: true, frequency: "weekly" }],
+        weekly: [{ name: "Gym", checked: false, streak: 3, atRisk: true, frequency: "weekly", timeOfDay: "any" }],
       }),
     ).toBe(
       [
@@ -94,8 +97,8 @@ describe("weeklyMessage", () => {
           total: 23,
           tasksDone: 9,
           habits: [
-            { name: "Read", count: 6, frequency: "daily" },
-            { name: "Gym", count: 1, frequency: "weekly" },
+            { name: "Read", count: 6, possible: 7, frequency: "daily" },
+            { name: "Gym", count: 1, possible: 1, frequency: "weekly" },
           ],
           shipped: ["Garden Planner"],
           noSpendDays: 3,
@@ -116,5 +119,36 @@ describe("weeklyMessage", () => {
     expect(weeklyMessage({ ...base, wins: { total: 0, tasksDone: 0, habits: [], shipped: [], noSpendDays: 0, dailyPercent: null } })).toBe(
       "Week in review: a quiet week. New week, fresh start.",
     );
+  });
+});
+
+describe("time of day and energy", () => {
+  const h = (name: string, timeOfDay: "morning" | "afternoon" | "evening" | "any", checked = false) => ({
+    name,
+    checked,
+    streak: 0,
+    atRisk: false,
+    frequency: "daily" as const,
+    timeOfDay,
+  });
+  it("morning lists morning habits first", () => {
+    expect(morningMessage({ ...base, tasks: null, timeOfDay: true, daily: [h("Read", "evening"), h("Stretch", "morning"), h("Water", "any")] })).toBe(
+      "Good morning. Morning habits: Stretch. Later: Read, Water.",
+    );
+  });
+  it("evening asks for energy when not logged, even with nothing else open", () => {
+    expect(eveningMessage({ ...base, tasks: [], energyAsk: true })).toBe('Evening check.\nEnergy today? Reply "energy low", "ok" or "high".');
+  });
+  it("evening stays silent when energy is logged and nothing is open", () => {
+    expect(eveningMessage({ ...base, tasks: [], energyAsk: false })).toBe("");
+  });
+  it("weekly: singular win, count/possible, insight", () => {
+    expect(
+      weeklyMessage({
+        ...base,
+        insight: "On high-energy days you do Read 82% of the time, on low days 40%.",
+        wins: { total: 1, tasksDone: 0, habits: [{ name: "Read", count: 1, possible: 3, frequency: "daily" }], shipped: [], noSpendDays: 0, dailyPercent: null },
+      }),
+    ).toBe("Week in review: 1 win. Read 1/3.\nOn high-energy days you do Read 82% of the time, on low days 40%.");
   });
 });

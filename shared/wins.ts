@@ -7,11 +7,13 @@ export type WinsView = {
   days: string[];
   today: string;
   tasksDone: { day: string; text: string }[];
-  habits: { name: string; frequency: Frequency; count: number }[];
+  habits: { name: string; frequency: Frequency; count: number; possible: number }[];
   dailyPercent: number | null;
   shipped: { project: string; note: string | null; day: string }[] | null;
   noSpendDays: string[] | null;
   skipped: { name: string; priceCents: number; day: string }[] | null;
+  /** Energy pattern line, when the Energy check-in extra is on and there is enough data. */
+  insight: string | null;
   total: number;
 };
 

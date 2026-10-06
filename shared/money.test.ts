@@ -14,6 +14,7 @@ import {
   paceSeries,
   parseEuroToCents,
   planBillOccurrences,
+  speakEuro,
   waitHours,
 } from "./money";
 
@@ -202,5 +203,15 @@ describe("waitHours", () => {
     expect(waitHours(5000)).toBe(72);
     expect(waitHours(20000)).toBe(72);
     expect(waitHours(20001)).toBe(168);
+  });
+});
+
+describe("speakEuro", () => {
+  it("never says 0 euros for a non-zero amount", () => {
+    expect(speakEuro(50)).toBe("less than 1 euro");
+    expect(speakEuro(-50)).toBe("less than 1 euro");
+    expect(speakEuro(0)).toBe("0 euros");
+    expect(speakEuro(100)).toBe("1 euro");
+    expect(speakEuro(41250)).toBe("412 euros");
   });
 });

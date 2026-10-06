@@ -186,3 +186,20 @@ describe("atRisk", () => {
     expect(atRisk("monthly", set("2026-08-01"), "2026-10-06")).toBe(false);
   });
 });
+
+describe("dayPercents with archived habits", () => {
+  it("counts an archived habit only before its archive day", () => {
+    const habits = [
+      { id: "a", createdOn: "2026-09-01", archivedOn: "2026-10-03" },
+      { id: "b", createdOn: "2026-09-01", archivedOn: null },
+    ];
+    const checks = new Map([
+      ["a", new Set(["2026-10-01", "2026-10-02"])],
+      ["b", new Set(["2026-10-01", "2026-10-03"])],
+    ]);
+    const d = dayPercents(habits, checks, "2026-10", "2026-10-03");
+    expect(d[0].percent).toBe(100); // both
+    expect(d[1].percent).toBe(50); // a yes, b no
+    expect(d[2].percent).toBe(100); // only b counts from the 3rd
+  });
+});

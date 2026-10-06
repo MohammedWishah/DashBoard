@@ -2,9 +2,9 @@
 // An empty string means "stay silent".
 
 import { formatEuro } from "./money";
-import type { Frequency } from "./planner";
+import type { Frequency, TimeOfDay } from "./planner";
 
-type Habit = { name: string; checked: boolean; streak: number; atRisk: boolean; frequency: Frequency };
+type Habit = { name: string; checked: boolean; streak: number; atRisk: boolean; frequency: Frequency; timeOfDay: TimeOfDay };
 
 export type BriefingInput = {
   today: string;
@@ -22,13 +22,19 @@ export type BriefingInput = {
   wins: {
     total: number;
     tasksDone: number;
-    habits: { name: string; count: number; frequency: Frequency }[];
+    habits: { name: string; count: number; possible: number; frequency: Frequency }[];
     shipped: string[];
     noSpendDays: number;
     dailyPercent: number | null;
   } | null;
   leftCents: number | null;
   savedCents: number | null;
+  /** Time-of-day extra on: group the morning brief by morning / later. */
+  timeOfDay: boolean;
+  /** Energy extra on and nothing logged today: the evening message asks for it. */
+  energyAsk: boolean;
+  /** Energy pattern line for the weekly review, if there is one. */
+  insight: string | null;
 };
 
 const names = (xs: { name: string }[]) => xs.map((x) => x.name).join(", ");
@@ -42,12 +48,18 @@ export function morningMessage(i: BriefingInput): string {
         : `Top 3: ${i.tasks.map((t) => (t.done ? `${t.text} (done)` : t.text)).join(", ")}.`,
     );
   }
+  const openDaily = i.daily.filter((h) => !h.checked);
+  const dailyGroups: [Habit[], string][] = i.timeOfDay
+    ? [
+        [openDaily.filter((h) => h.timeOfDay === "morning"), "Morning habits"],
+        [openDaily.filter((h) => h.timeOfDay !== "morning"), "Later"],
+      ]
+    : [[openDaily, "Habits today"]];
   const habitParts = [
-    [i.daily, "Habits today"],
-    [i.weekly, "This week"],
-    [i.monthly, "This month"],
+    ...dailyGroups,
+    [i.weekly.filter((h) => !h.checked), "This week"] as [Habit[], string],
+    [i.monthly.filter((h) => !h.checked), "This month"] as [Habit[], string],
   ]
-    .map(([list, label]) => [(list as Habit[]).filter((h) => !h.checked), label] as const)
     .filter(([open]) => open.length > 0)
     .map(([open, label]) => `${label}: ${names(open)}.`);
   if (habitParts.length > 0) lines.push(habitParts.join(" "));
@@ -63,9 +75,9 @@ export function morningMessage(i: BriefingInput): string {
 }
 
 export function eveningMessage(i: BriefingInput): string {
-  if (!i.tasks) return "";
+  if (!i.tasks && !i.energyAsk) return "";
   const lines: string[] = [];
-  const open = i.tasks.filter((t) => !t.done);
+  const open = (i.tasks ?? []).filter((t) => !t.done);
   if (open.length > 0) lines.push(`Top 3 still open: ${open.map((t) => t.text).join(", ")}.`);
   const left = i.daily.filter((h) => !h.checked);
   if (left.length > 0) lines.push(`Habits left: ${names(left)}.`);
@@ -77,6 +89,7 @@ export function eveningMessage(i: BriefingInput): string {
         : `${h.name} missed yesterday, tick today to keep ${h.streak}.`,
     );
   }
+  if (i.energyAsk) lines.push('Energy today? Reply "energy low", "ok" or "high".');
   return lines.length === 0 ? "" : ["Evening check.", ...lines].join("\n");
 }
 
@@ -89,11 +102,12 @@ export function weeklyMessage(i: BriefingInput): string {
     } else {
       const parts: string[] = [];
       if (w.tasksDone > 0) parts.push(`Top 3 done ${w.tasksDone}×`);
-      for (const h of w.habits.slice(0, 3)) parts.push(h.frequency === "weekly" ? `${h.name} ✓` : `${h.name} ${h.count}/7`);
+      for (const h of w.habits.slice(0, 3)) parts.push(h.frequency === "weekly" ? `${h.name} ✓` : `${h.name} ${h.count}/${h.possible}`);
       if (w.shipped.length > 0) parts.push(`shipped ${w.shipped.join(", ")}`);
       if (w.noSpendDays > 0) parts.push(`${w.noSpendDays} no-spend day${w.noSpendDays === 1 ? "" : "s"}`);
-      lines.push(`Week in review: ${w.total} wins. ${parts.join(", ")}.`);
+      lines.push(`Week in review: ${w.total} win${w.total === 1 ? "" : "s"}. ${parts.join(", ")}.`);
       if (w.dailyPercent !== null) lines.push(`Daily habits: ${w.dailyPercent}% of the week.`);
+      if (i.insight) lines.push(i.insight);
     }
   }
   const money: string[] = [];

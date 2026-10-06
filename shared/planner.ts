@@ -6,6 +6,9 @@ import { berlinToday, daysInMonth } from "./money";
 export const FREQUENCIES = ["daily", "weekly", "monthly"] as const;
 export type Frequency = (typeof FREQUENCIES)[number];
 
+export const TIMES_OF_DAY = ["morning", "afternoon", "evening", "any"] as const;
+export type TimeOfDay = (typeof TIMES_OF_DAY)[number];
+
 export const HABIT_LIMITS: Record<Frequency, number> = { daily: 50, weekly: 20, monthly: 40 };
 export const MAX_DAY_TASKS = 3;
 
@@ -107,14 +110,15 @@ export function habitPercent(
 
 /** For the progress chart: each day's share of daily habits ticked. Null for future days and days with no habits. */
 export function dayPercents(
-  habits: { id: string; createdOn: string }[],
+  habits: { id: string; createdOn: string; archivedOn?: string | null }[],
   checks: ReadonlyMap<string, ReadonlySet<string>>,
   month: string,
   today: string,
 ): { date: string; percent: number | null }[] {
   return daysOfMonth(month).map((date) => {
     if (date > today) return { date, percent: null };
-    const eligible = habits.filter((h) => h.createdOn <= date);
+    // An archived habit counts only up to the day before it was archived.
+    const eligible = habits.filter((h) => h.createdOn <= date && (!h.archivedOn || date < h.archivedOn));
     if (eligible.length === 0) return { date, percent: null };
     const done = eligible.filter((h) => checks.get(h.id)?.has(date)).length;
     return { date, percent: Math.round((100 * done) / eligible.length) };

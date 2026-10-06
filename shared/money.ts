@@ -177,6 +177,7 @@ export function findCategoryByName<T extends { name: string }>(cats: T[], name: 
 
 /** Whole euros for speech: 41250 -> "412 euros". */
 export function speakEuro(cents: number): string {
+  if (cents !== 0 && Math.abs(cents) < 100) return "less than 1 euro";
   const euros = Math.trunc(cents / 100);
   return `${Math.abs(euros) === 1 ? `${euros} euro` : `${euros} euros`}`;
 }

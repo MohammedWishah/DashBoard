@@ -261,7 +261,7 @@ curl -s -X POST "$BASE/api/agent/projects/garden%20planner/ship" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-**How much money is left this month** (read-only; expenses are logged in the app)
+**How much money is left this month**
 
 ```bash
 curl -s "$BASE/api/agent/money/left" \
@@ -271,6 +271,25 @@ curl -s "$BASE/api/agent/money/left" \
 ```
 
 The speech names any category at 80% of its limit or over.
+
+**Log an expense** (`amount` is euros; `spentOn` defaults to today, Berlin time)
+
+```bash
+curl -s -X POST "$BASE/api/agent/money/expenses"   -H "Authorization: Bearer $TOKEN"   -H "Content-Type: application/json"   -d '{"category":"food","amount":12.4,"note":"Lidl"}'
+# 201 {"expense":{"id":"…","category":"Food","amountCents":1240,"spentOn":"2026-10-06","note":"Lidl"},
+#      "speech":"Logged €12.40 in Food. 38 euros left in Food this month."}
+```
+
+The category matches your category names, ignoring case. `"Other"` always works (it's created or un-archived if needed). Any other unknown name returns `404 unknown_category` with your names in `error.details.categories`, so the agent can retry with the closest one, or with `Other` and the item as the note.
+
+**Undo** (the id from the reply above)
+
+```bash
+curl -s -X DELETE "$BASE/api/agent/money/expenses/EXPENSE_ID"   -H "Authorization: Bearer $TOKEN"
+# {"speech":"Removed €12.40 from Food."}
+```
+
+To set it up in Hermes Agent, see [integrations/hermes/life-board-money](integrations/hermes/life-board-money/SKILL.md).
 
 Locally, use `BASE=http://127.0.0.1:8788` and a token created in your local app.
 

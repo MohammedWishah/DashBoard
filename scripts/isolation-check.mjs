@@ -88,6 +88,7 @@ check("same project name allowed for two users", ownerProj.status === 201 && bob
 
 const ownerCat = await owner("POST", "/money/categories", { name: `Hobby ${run}` });
 const bobCat = await bob("POST", "/money/categories", { name: `Hobby ${run}` });
+const ownerOnlyCat = await owner("POST", "/money/categories", { name: `OwnerOnly ${run}` });
 check("same category name allowed for two users", ownerCat.status === 201 && bobCat.status === 201);
 
 const ownerExpense = await owner("POST", "/money/expenses", { categoryId: ownerCat.body.category.id, amountCents: 1234, spentOn: "2026-10-02" });
@@ -151,6 +152,33 @@ check("Money removed: overview 403", (await bob("GET", "/money/overview")).statu
 check("Money removed: agent money 403", (await agent("GET", "/agent/money/left")).status === 403);
 check("Projects still allowed for agent", (await agent("GET", "/agent/projects")).status === 200);
 await owner("PATCH", `/admin/users/${bobMe.id}`, { features: ["money", "planner", "projects"] });
+
+// ---- agent expense logging (give Food a limit so the "left this month" sentence shows)
+const bobFood = (await bob("GET", "/money/categories")).body.categories.find((c) => c.name === "Food");
+await bob("PATCH", `/money/categories/${bobFood.id}`, { monthlyLimitCents: 1_000_000 });
+const logged = await agent("POST", "/agent/money/expenses", { category: " FOOD ", amount: 12.4, note: "McDonald's \"big\" one" });
+check("agent logs by category name, euros to cents", logged.status === 201 && logged.body.expense.amountCents === 1240 && logged.body.expense.category === "Food" && logged.body.expense.note === "McDonald's \"big\" one", JSON.stringify(logged.body));
+check("agent speech shows amount and what's left", logged.body?.speech?.startsWith("Logged €12.40 in Food.") && logged.body.speech.includes("left in Food this month"), logged.body?.speech);
+const lastMonth = await agent("POST", "/agent/money/expenses", { category: "Food", amount: 3, spentOn: "2026-09-15" });
+check("agent can backdate; no 'this month' line for last month", lastMonth.status === 201 && lastMonth.body.expense.spentOn === "2026-09-15" && !lastMonth.body.speech.includes("this month"), JSON.stringify(lastMonth.body));
+check("sub-cent amount rejected (400)", (await agent("POST", "/agent/money/expenses", { category: "Food", amount: 1.234 })).status === 400);
+check("euros over 100000 rejected (400)", (await agent("POST", "/agent/money/expenses", { category: "Food", amount: 100000.01 })).status === 400);
+const unknown = await agent("POST", "/agent/money/expenses", { category: `OwnerOnly ${run}`, amount: 5 });
+check("owner's category name is unknown to Bob (404)", unknown.status === 404 && unknown.body.error.code === "unknown_category", JSON.stringify(unknown.body));
+check("unknown_category lists only Bob's categories", Array.isArray(unknown.body.error.details?.categories) && unknown.body.error.details.categories.includes("Food") && !unknown.body.error.details.categories.includes(`OwnerOnly ${run}`), JSON.stringify(unknown.body.error.details));
+// Other: archived Other comes back instead of clashing on name
+const bobOther = (await bob("GET", "/money/categories")).body.categories.find((c) => c.name === "Other");
+await bob("PATCH", `/money/categories/${bobOther.id}`, { archived: true });
+const toOther = await agent("POST", "/agent/money/expenses", { category: "other", amount: 30, note: "gifts" });
+check("archived Other is un-archived and used", toOther.status === 201 && toOther.body.expense.category === "Other", JSON.stringify(toOther.body));
+const others = (await bob("GET", "/money/categories")).body.categories.filter((c) => c.name === "Other");
+check("still exactly one Other, active", others.length === 1 && others[0].archived === false && others[0].id === bobOther.id);
+check("Bob's agent can't undo owner's expense (404)", (await agent("DELETE", `/agent/money/expenses/${ownerExpense.body.expense.id}`)).status === 404);
+const undo = await agent("DELETE", `/agent/money/expenses/${logged.body.expense.id}`);
+check("agent undo removes the expense", undo.status === 200 && undo.body.speech === "Removed €12.40 from Food.", JSON.stringify(undo.body));
+check("undo twice -> 404", (await agent("DELETE", `/agent/money/expenses/${logged.body.expense.id}`)).status === 404);
+const ownerStillHas = (await owner("GET", "/money/expenses?month=2026-10")).body.expenses.some((e) => e.id === ownerExpense.body.expense.id);
+check("owner's expense untouched", ownerStillHas);
 
 await bob("DELETE", `/agent-tokens/${tok.body.id}`);
 check("revoked token stops working", (await agent("GET", "/agent/projects")).status === 401);

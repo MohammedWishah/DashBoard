@@ -30,7 +30,7 @@ export function MonthSection({ month, currentMonth, onMonth }: { month: string; 
           <ChartSkeleton />
         </>
       ) : (
-        <div className={cn("grid min-w-0 gap-4", q.isPlaceholderData && "opacity-60")}>
+        <div className={cn("grid min-w-0 gap-4", q.isPlaceholderData && "pointer-events-none opacity-60")} aria-busy={q.isPlaceholderData}>
           <DailyGrid m={m} />
           <ProgressChart m={m} />
           <div className="grid min-w-0 gap-4 lg:grid-cols-2">

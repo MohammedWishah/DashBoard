@@ -2,8 +2,10 @@ import { ArrowRight } from "@phosphor-icons/react";
 import { Link } from "wouter";
 import { berlinToday } from "@shared/money";
 import { panel } from "@/components/money/summary";
+import { EnergyChips } from "@/components/planner/energy-chips";
 import { HabitChecklist, TopThree } from "@/components/planner/today-card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useHasExtra } from "@/hooks/me";
 import { useDay } from "@/hooks/planner";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +20,9 @@ export function HomeToday() {
         monthly: d.habits.monthly.filter((h) => !h.checked),
       }
     : null;
+  const showTiny = useHasExtra("tiny_habits");
+  const groupByTime = useHasExtra("time_of_day");
+  const showEnergy = useHasExtra("energy");
   return (
     <section className={cn(panel, "grid min-w-0 gap-5 p-6")} aria-labelledby="home-today">
       <div className="flex items-center justify-between">
@@ -28,6 +33,7 @@ export function HomeToday() {
           Open Planner <ArrowRight className="size-3.5" />
         </Link>
       </div>
+      {showEnergy && d && <EnergyChips date={d.date} level={d.energy} />}
       {!d || !open ? (
         <Skeleton className="h-32 w-full" />
       ) : (
@@ -39,9 +45,9 @@ export function HomeToday() {
               <p className="text-sm text-muted-foreground">Nothing left to tick. Nice.</p>
             ) : (
               <>
-                {d.habits.daily.length > 0 && <HabitChecklist habits={d.habits.daily} date={d.date} />}
-                {open.weekly.length > 0 && <HabitChecklist title="This week" habits={open.weekly} date={d.date} />}
-                {open.monthly.length > 0 && <HabitChecklist title="This month" habits={open.monthly} date={d.date} />}
+                {d.habits.daily.length > 0 && <HabitChecklist habits={d.habits.daily} date={d.date} showTiny={showTiny} groupByTime={groupByTime} />}
+                {open.weekly.length > 0 && <HabitChecklist title="This week" habits={open.weekly} date={d.date} showTiny={showTiny} />}
+                {open.monthly.length > 0 && <HabitChecklist title="This month" habits={open.monthly} date={d.date} showTiny={showTiny} />}
               </>
             )}
           </div>

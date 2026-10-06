@@ -4,9 +4,11 @@ import { format, parseISO } from "date-fns";
 import { MAX_DAY_TASKS, addDays, mondayOf } from "@shared/planner";
 import type { DayHabit, DayView } from "@shared/planner-schemas";
 import { panel } from "@/components/money/summary";
+import { EnergyChips } from "@/components/planner/energy-chips";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useHasExtra } from "@/hooks/me";
 import { useDay, useSaveTasks, useToggleCheck } from "@/hooks/planner";
 import { cn } from "@/lib/utils";
 
@@ -16,6 +18,9 @@ export function TodayCard({ date, today, onDate }: { date: string; today: string
   const dailyDone = d ? d.habits.daily.filter((h) => h.checked).length : 0;
   const sameWeek = mondayOf(date) === mondayOf(today);
   const sameMonth = date.slice(0, 7) === today.slice(0, 7);
+  const showTiny = useHasExtra("tiny_habits");
+  const groupByTime = useHasExtra("time_of_day");
+  const showEnergy = useHasExtra("energy");
   return (
     <section className={cn(panel, "grid min-w-0 gap-5 p-5")} aria-labelledby="today-title">
       <header className="flex flex-wrap items-center justify-between gap-2">
@@ -34,10 +39,12 @@ export function TodayCard({ date, today, onDate }: { date: string; today: string
           </Button>
         </div>
       </header>
+      {showEnergy && d && <EnergyChips date={d.date} level={d.energy} />}
       {!d ? (
         <Skeleton className="h-40 w-full" />
       ) : (
-        <div className={cn("grid gap-6 md:grid-cols-2", day.isPlaceholderData && "opacity-60")}>
+        // While the next day loads, the old one is dimmed and can't be clicked.
+        <div className={cn("grid gap-6 md:grid-cols-2", day.isPlaceholderData && "pointer-events-none opacity-60")} aria-busy={day.isPlaceholderData}>
           <TopThree key={d.date} day={d} />
           <div className="grid content-start gap-4">
             <div className="flex items-baseline justify-between">
@@ -52,9 +59,9 @@ export function TodayCard({ date, today, onDate }: { date: string; today: string
               <p className="text-sm text-muted-foreground">No habits yet. Add some with Manage habits.</p>
             ) : (
               <>
-                <HabitChecklist habits={d.habits.daily} date={d.date} />
-                {d.habits.weekly.length > 0 && <HabitChecklist title={sameWeek ? "This week" : "That week"} habits={d.habits.weekly} date={d.date} />}
-                {d.habits.monthly.length > 0 && <HabitChecklist title={sameMonth ? "This month" : "That month"} habits={d.habits.monthly} date={d.date} />}
+                <HabitChecklist habits={d.habits.daily} date={d.date} showTiny={showTiny} groupByTime={groupByTime} />
+                {d.habits.weekly.length > 0 && <HabitChecklist title={sameWeek ? "This week" : "That week"} habits={d.habits.weekly} date={d.date} showTiny={showTiny} />}
+                {d.habits.monthly.length > 0 && <HabitChecklist title={sameMonth ? "This month" : "That month"} habits={d.habits.monthly} date={d.date} showTiny={showTiny} />}
               </>
             )}
           </div>
@@ -140,42 +147,78 @@ const slots = (day: DayView): Draft[] =>
 /** What gets saved: filled slots only, trimmed, in order. */
 const clean = (drafts: Draft[]) => drafts.filter((t) => t.text.trim()).map((t) => ({ text: t.text.trim(), done: t.done }));
 
-export function HabitChecklist({ title, habits, date }: { title?: string; habits: DayHabit[]; date: string }) {
-  const toggle = useToggleCheck();
+const TIME_GROUPS: { value: DayHabit["timeOfDay"]; label: string }[] = [
+  { value: "morning", label: "Morning" },
+  { value: "afternoon", label: "Afternoon" },
+  { value: "evening", label: "Evening" },
+  { value: "any", label: "Anytime" },
+];
+
+export function HabitChecklist({
+  title,
+  habits,
+  date,
+  showTiny = false,
+  groupByTime = false,
+}: {
+  title?: string;
+  habits: DayHabit[];
+  date: string;
+  /** Tiny versions extra: show "Tiny: …" under each habit. */
+  showTiny?: boolean;
+  /** Time of day extra: group under Morning / Afternoon / Evening / Anytime. */
+  groupByTime?: boolean;
+}) {
+  const groups = groupByTime
+    ? TIME_GROUPS.map((g) => ({ label: g.label, habits: habits.filter((h) => h.timeOfDay === g.value) })).filter((g) => g.habits.length > 0)
+    : [{ label: null, habits }];
   return (
     <div className="grid gap-1.5">
       {title && <p className="text-xs text-muted-foreground">{title}</p>}
-      <ul className="grid gap-1.5">
-        {habits.map((h) => (
-          <li key={h.id} className="grid gap-0.5 text-sm">
-            <div className="flex items-center gap-2">
-              <TickBox
-                checked={h.checked}
-                label={`${h.name}: ${h.checked ? "untick" : "tick"}`}
-                onChange={(checked) => toggle.mutate({ habitId: h.id, frequency: h.frequency, date, checked })}
-              />
-              <span className={cn("min-w-0 flex-1 truncate", h.checked && "text-muted-foreground")}>
-                {h.name}
-                {h.total !== null && <span className="ml-1.5 text-xs text-muted-foreground">· {h.total} done</span>}
-              </span>
-              {h.streak > 1 && (
-                <span className="flex items-center gap-0.5 text-xs tabular-nums text-muted-foreground" title={`${h.streak} in a row`}>
-                  <Fire weight="fill" className="text-primary" />
-                  {h.streak}
-                </span>
-              )}
-            </div>
-            {h.atRisk && (
-              <p className="flex items-center gap-1.5 pl-7 text-xs text-status-warning">
-                <WarningCircle weight="fill" aria-hidden />
-                Missed {h.frequency === "weekly" ? "last week" : "yesterday"} · tick {h.frequency === "weekly" ? "this week" : "today"} to keep{" "}
-                {h.streak}
-              </p>
-            )}
-          </li>
-        ))}
-      </ul>
+      {groups.map((g) => (
+        <div key={g.label ?? "all"} className="grid gap-1.5">
+          {g.label && <p className="pt-1 text-[11px] uppercase tracking-wide text-muted-foreground">{g.label}</p>}
+          <ul className="grid gap-1.5">
+            {g.habits.map((h) => (
+              <HabitItem key={h.id} h={h} date={date} showTiny={showTiny} />
+            ))}
+          </ul>
+        </div>
+      ))}
     </div>
+  );
+}
+
+function HabitItem({ h, date, showTiny }: { h: DayHabit; date: string; showTiny: boolean }) {
+  const toggle = useToggleCheck();
+  return (
+    <li className="grid gap-0.5 text-sm">
+      <div className="flex items-center gap-2">
+        <TickBox
+          checked={h.checked}
+          label={`${h.name}: ${h.checked ? "untick" : "tick"}`}
+          onChange={(checked) => toggle.mutate({ habitId: h.id, frequency: h.frequency, date, checked })}
+        />
+        <span className={cn("min-w-0 flex-1 truncate", h.checked && "text-muted-foreground")}>
+          {h.name}
+          {h.total !== null && <span className="ml-1.5 text-xs text-muted-foreground">· {h.total} done</span>}
+        </span>
+        {h.streak > 1 && (
+          <span className="flex items-center gap-0.5 text-xs tabular-nums text-muted-foreground" title={`${h.streak} in a row`}>
+            <Fire weight="fill" className="text-primary" />
+            {h.streak}
+          </span>
+        )}
+      </div>
+      {showTiny && h.tiny && <p className="pl-7 text-xs text-muted-foreground">Tiny: {h.tiny}</p>}
+      {h.atRisk && (
+        <p className="flex items-center gap-1.5 pl-7 text-xs text-status-warning">
+          <WarningCircle weight="fill" aria-hidden />
+          Missed {h.frequency === "weekly" ? "last week" : "yesterday"} · tick {h.frequency === "weekly" ? "this week" : "today"} to keep{" "}
+          {h.streak}
+        </p>
+      )}
+    </li>
   );
 }
 

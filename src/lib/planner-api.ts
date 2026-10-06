@@ -1,5 +1,6 @@
 import type { DayTaskRow, DayView, HabitCreateInput, HabitRow, HabitUpdate, MonthView } from "@shared/planner-schemas";
 import type { WinsView } from "@shared/wins";
+import type { EnergyLevel } from "@shared/energy";
 import { request } from "@/lib/api";
 
 const json = (data: unknown) => JSON.stringify(data);
@@ -13,6 +14,12 @@ export const plannerApi = {
     request<{ habit: HabitRow }>("/planner/habits", { method: "POST", body: json(input) }).then((r) => r.habit),
   updateHabit: (id: string, patch: HabitUpdate) =>
     request<{ habit: HabitRow }>(`/planner/habits/${id}`, { method: "PATCH", body: json(patch) }).then((r) => r.habit),
+  reorder: (ids: string[]) =>
+    request<{ habits: HabitRow[] }>("/planner/habits/order", { method: "PUT", body: json({ ids }) }).then((r) => r.habits),
+  setEnergy: (date: string, level: EnergyLevel | null) =>
+    level
+      ? request(`/planner/energy/${date}`, { method: "PUT", body: json({ level }) })
+      : request(`/planner/energy/${date}`, { method: "DELETE" }),
   deleteHabit: (id: string) => request<{ ok: true }>(`/planner/habits/${id}`, { method: "DELETE" }),
   tick: (habitId: string, period: string) => request(`/planner/habits/${habitId}/checks/${period}`, { method: "PUT" }),
   untick: (habitId: string, period: string) => request(`/planner/habits/${habitId}/checks/${period}`, { method: "DELETE" }),

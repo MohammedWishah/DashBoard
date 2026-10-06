@@ -1,5 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import type { EnergyLevel } from "@shared/energy";
 import { periodFor, type Frequency } from "@shared/planner";
 import type { DayView, MonthView } from "@shared/planner-schemas";
 import { plannerApi } from "@/lib/planner-api";
@@ -23,6 +24,19 @@ export const useWins = (week: string) =>
 
 export const useHabits = () => useQuery({ queryKey: plannerKeys.habits, queryFn: plannerApi.habits });
 
+const inFlight = new Map<string, Promise<unknown>>();
+/** Runs `fn` after the previous call with the same key finishes, so fast clicks on one box land in order. */
+function queued<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const run = (inFlight.get(key) ?? Promise.resolve()).catch(() => undefined).then(fn);
+  inFlight.set(key, run);
+  void run
+    .catch(() => undefined)
+    .finally(() => {
+      if (inFlight.get(key) === run) inFlight.delete(key);
+    });
+  return run;
+}
+
 type Toggle = { habitId: string; frequency: Frequency; date: string; checked: boolean };
 
 /** Ticks or unticks a habit for the period containing `date`, updating every cached view first. */
@@ -31,7 +45,7 @@ export function useToggleCheck() {
   return useMutation({
     mutationFn: ({ habitId, frequency, date, checked }: Toggle) => {
       const period = periodFor(frequency, date);
-      return checked ? plannerApi.tick(habitId, period) : plannerApi.untick(habitId, period);
+      return queued(`${habitId}|${period}`, () => (checked ? plannerApi.tick(habitId, period) : plannerApi.untick(habitId, period)));
     },
     onMutate: async ({ habitId, frequency, date, checked }: Toggle) => {
       await qc.cancelQueries({ queryKey: plannerKeys.all });
@@ -86,6 +100,20 @@ export function usePlannerAction<V>(fn: (v: V) => Promise<unknown>, success?: st
   return useMutation({
     mutationFn: fn,
     onSuccess: () => success && toast.success(success),
+    onError: (err) => toast.error(err.message),
+    onSettled: () => qc.invalidateQueries({ queryKey: plannerKeys.all }),
+  });
+}
+
+/** Energy check-in: one tap, saved in order, reflected in the day view right away. */
+export function useSetEnergy() {
+  const qc = useQueryClient();
+  return useMutation({
+    scope: { id: "planner-energy" },
+    mutationFn: ({ date, level }: { date: string; level: EnergyLevel | null }) => plannerApi.setEnergy(date, level),
+    onMutate: ({ date, level }) => {
+      qc.setQueryData<DayView>(plannerKeys.day(date), (d) => (d ? { ...d, energy: level } : d));
+    },
     onError: (err) => toast.error(err.message),
     onSettled: () => qc.invalidateQueries({ queryKey: plannerKeys.all }),
   });

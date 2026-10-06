@@ -35,7 +35,9 @@ export function WinsCard() {
       {!w ? (
         <Skeleton className="h-24 w-full" />
       ) : w.total === 0 ? (
-        <p className="text-sm text-muted-foreground">Nothing yet this week. Tick one thing and it shows up here.</p>
+        <p className="text-sm text-muted-foreground">
+          {week === thisWeek ? "Nothing yet this week. Tick one thing and it shows up here." : "Nothing logged that week."}
+        </p>
       ) : (
         <div className={cn("grid gap-4 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-start", q.isPlaceholderData && "opacity-60")}>
           <div className="grid">
@@ -76,6 +78,7 @@ export function WinsCard() {
           </ul>
         </div>
       )}
+      {w?.insight && <p className="text-sm text-muted-foreground">{w.insight}</p>}
     </section>
   );
 }

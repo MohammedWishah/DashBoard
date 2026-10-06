@@ -43,6 +43,10 @@ def call(method, path, body=None):
     except urllib.error.URLError as e:
         print(json.dumps({"error": {"code": "unreachable", "message": str(e.reason)}}))
         sys.exit(1)
+    except OSError as e:
+        # Timeouts and dropped connections while reading the reply: the request may have been saved.
+        print(json.dumps({"error": {"code": "no_reply", "message": f"No reply from Life Board ({e}). The request may have gone through."}}))
+        sys.exit(1)
 
 
 def main():

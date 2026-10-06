@@ -55,9 +55,14 @@ export async function logAgentExpense(db: Db, userId: string, input: AgentExpens
   const spentOn = input.spentOn ?? berlinToday(now);
   const expense = await createExpense(db, userId, { categoryId: category.id, amountCents, spentOn, note: input.note });
 
-  const parts = [`Logged ${formatEuro(amountCents)} in ${category.name}.`];
+  // Name the date unless it's today, so a misheard "yesterday" is visible in the reply.
+  const on = spentOn === berlinToday(now) ? "" : ` on ${spentOn}`;
+  const parts = [`Logged ${formatEuro(amountCents)} in ${category.name}${on}.`];
   if (category.monthlyLimitCents !== null && spentOn.slice(0, 7) === berlinMonth(now)) {
-    const left = (await getOverview(db, userId, undefined, now)).categories.find((c) => c.id === category.id)?.leftCents;
+    // The expense is already saved. A failure here must not turn into an error the agent retries.
+    const left = await getOverview(db, userId, undefined, now)
+      .then((o) => o.categories.find((c) => c.id === category.id)?.leftCents)
+      .catch(() => null);
     if (left != null) {
       parts.push(
         left >= 0

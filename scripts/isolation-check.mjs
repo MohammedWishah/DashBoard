@@ -158,9 +158,9 @@ const bobFood = (await bob("GET", "/money/categories")).body.categories.find((c)
 await bob("PATCH", `/money/categories/${bobFood.id}`, { monthlyLimitCents: 1_000_000 });
 const logged = await agent("POST", "/agent/money/expenses", { category: " FOOD ", amount: 12.4, note: "McDonald's \"big\" one" });
 check("agent logs by category name, euros to cents", logged.status === 201 && logged.body.expense.amountCents === 1240 && logged.body.expense.category === "Food" && logged.body.expense.note === "McDonald's \"big\" one", JSON.stringify(logged.body));
-check("agent speech shows amount and what's left", logged.body?.speech?.startsWith("Logged €12.40 in Food.") && logged.body.speech.includes("left in Food this month"), logged.body?.speech);
+check("agent speech shows amount and what's left, no date for today", logged.body?.speech?.startsWith("Logged €12.40 in Food. ") && logged.body.speech.includes("left in Food this month"), logged.body?.speech);
 const lastMonth = await agent("POST", "/agent/money/expenses", { category: "Food", amount: 3, spentOn: "2026-09-15" });
-check("agent can backdate; no 'this month' line for last month", lastMonth.status === 201 && lastMonth.body.expense.spentOn === "2026-09-15" && !lastMonth.body.speech.includes("this month"), JSON.stringify(lastMonth.body));
+check("agent can backdate; speech names the date, no 'this month' line", lastMonth.status === 201 && lastMonth.body.expense.spentOn === "2026-09-15" && lastMonth.body.speech === "Logged €3.00 in Food on 2026-09-15.", JSON.stringify(lastMonth.body));
 check("sub-cent amount rejected (400)", (await agent("POST", "/agent/money/expenses", { category: "Food", amount: 1.234 })).status === 400);
 check("euros over 100000 rejected (400)", (await agent("POST", "/agent/money/expenses", { category: "Food", amount: 100000.01 })).status === 400);
 const unknown = await agent("POST", "/agent/money/expenses", { category: `OwnerOnly ${run}`, amount: 5 });

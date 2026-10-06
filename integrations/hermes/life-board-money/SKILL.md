@@ -62,6 +62,8 @@ Reply with `speech`.
 - Never invent a category. Use one from `error.details.categories`, or `Other`.
 - If the amount or what it was for is unclear, ask one short question instead of guessing.
 - Error code `not_configured` means the user must put `LIFE_BOARD_URL` and `LIFE_BOARD_TOKEN` in `~/.hermes/.env`. `401` means the token was revoked or mistyped. `403 feature_disabled` means Money is off for this account.
+- After a `no_reply` error, never log again on your own: the expense may already be saved. Tell the user and let them check Life Board or tell you to retry. After `unreachable`, nothing was sent, so one retry is fine.
+- If the reply names a date ("… on 2026-10-05"), make sure it's the day the user meant. If it isn't, undo and log again with the right `--date`.
 - Never print or repeat the token.
 
 ## Verification

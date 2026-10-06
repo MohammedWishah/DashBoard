@@ -15,11 +15,14 @@ import {
   incomeUpdateSchema,
   monthQuerySchema,
   paymentCreateSchema,
+  wantBuySchema,
+  wantCreateSchema,
 } from "../../../shared/money-schemas";
 import { getDb } from "../db";
 import type { AppEnv } from "../env";
 import * as crud from "../services/money/crud";
 import { getCharts, getOverview, listExpenses } from "../services/money/overview";
+import { buyWant, createWant, deleteWant, listWants, skipWant } from "../services/money/wants";
 import { validate } from "../validate";
 
 const db = (c: { env: AppEnv["Bindings"] }) => getDb(c.env.DB);
@@ -114,5 +117,17 @@ export const moneyRoutes = new Hono<AppEnv>()
   )
   .delete("/payments/:id", async (c) => {
     await crud.deletePayment(db(c), c.get("userId"), c.req.param("id"));
+    return c.json(ok);
+  })
+  .get("/wants", async (c) => c.json(await listWants(db(c), c.get("userId"))))
+  .post("/wants", validate("json", wantCreateSchema), async (c) =>
+    c.json({ want: await createWant(db(c), c.get("userId"), c.req.valid("json")) }, 201),
+  )
+  .post("/wants/:id/buy", validate("json", wantBuySchema), async (c) =>
+    c.json(await buyWant(db(c), c.get("userId"), c.req.param("id"), c.req.valid("json"))),
+  )
+  .post("/wants/:id/skip", async (c) => c.json({ want: await skipWant(db(c), c.get("userId"), c.req.param("id")) }))
+  .delete("/wants/:id", async (c) => {
+    await deleteWant(db(c), c.get("userId"), c.req.param("id"));
     return c.json(ok);
   });

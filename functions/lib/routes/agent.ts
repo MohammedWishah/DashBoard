@@ -1,11 +1,12 @@
 import { Hono } from "hono";
-import { agentExpenseCreateSchema } from "../../../shared/money-schemas";
+import { agentExpenseCreateSchema, agentWantBuySchema, agentWantCreateSchema, agentWantNameSchema } from "../../../shared/money-schemas";
 import { agentHabitCheckSchema, agentTaskDoneSchema, agentTasksSchema } from "../../../shared/planner-schemas";
 import { shipProjectSchema, updateProjectSchema } from "../../../shared/schemas";
 import { getDb } from "../db";
 import type { AppEnv } from "../env";
 import { logAgentExpense, undoAgentExpense } from "../services/money/agent";
 import { getMoneyLeft } from "../services/money/overview";
+import { agentAddWant, agentBuyWant, agentSkipWant } from "../services/money/wants";
 import { agentCheck, agentSetTasks, agentTaskDone, agentToday } from "../services/planner-agent";
 import { listProjects, resolveProjectRef, shipProject, updateProject } from "../services/projects";
 import { validate } from "../validate";
@@ -63,4 +64,14 @@ export const agentRoutes = new Hono<AppEnv>()
   // "done with A", or by position "2".
   .post("/planner/tasks/done", validate("json", agentTaskDoneSchema), async (c) =>
     c.json(await agentTaskDone(getDb(c.env.DB), c.get("userId"), c.req.valid("json"))),
+  )
+  // "I want AirPods, 200": goes on the want list, not the budget.
+  .post("/money/wants", validate("json", agentWantCreateSchema), async (c) =>
+    c.json(await agentAddWant(getDb(c.env.DB), c.get("userId"), c.req.valid("json")), 201),
+  )
+  .post("/money/wants/skip", validate("json", agentWantNameSchema), async (c) =>
+    c.json(await agentSkipWant(getDb(c.env.DB), c.get("userId"), c.req.valid("json"))),
+  )
+  .post("/money/wants/buy", validate("json", agentWantBuySchema), async (c) =>
+    c.json(await agentBuyWant(getDb(c.env.DB), c.get("userId"), c.req.valid("json"))),
   );

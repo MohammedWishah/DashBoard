@@ -5,7 +5,7 @@ import type { AppEnv } from "./env";
 import { ApiError } from "./errors";
 import { requireUser } from "./middleware/session";
 import { requireAgentToken } from "./middleware/agent-auth";
-import { requireAdmin, requireFeature } from "./middleware/features";
+import { requireAdmin, requireExtra, requireFeature } from "./middleware/features";
 import { adminRoutes } from "./routes/admin";
 import { agentRoutes } from "./routes/agent";
 import { browserRoutes } from "./routes/browser";
@@ -26,6 +26,7 @@ const projectPaths = ["/projects", "/projects/*", "/stats", "/settings", "/agent
 for (const path of projectPaths) app.use(path, requireFeature("projects"));
 for (const path of ["/money/*", "/agent/money/*"]) app.use(path, requireFeature("money"));
 for (const path of ["/planner/*", "/agent/planner/*"]) app.use(path, requireFeature("planner"));
+for (const path of ["/money/wants", "/money/wants/*", "/agent/money/wants", "/agent/money/wants/*"]) app.use(path, requireExtra("wants"));
 app.use("/admin/*", requireAdmin);
 
 app.route("/agent", agentRoutes);

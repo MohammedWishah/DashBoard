@@ -276,6 +276,34 @@ const classicRead = (await bob("GET", `/planner/day?date=${today}`)).body.habits
 check("classic streak without the extra", classicRead.streak === 0 && classicRead.atRisk === false && classicRead.total === null, JSON.stringify(classicRead));
 await owner("PATCH", `/admin/users/${bobMe.id}`, { extras: ["wants", "wins", "kind_streaks", "nudges", "home_today"] });
 await bob("PUT", `/planner/habits/${rid}/checks/${today}`);
+// ---- want list
+const want = await bob("POST", "/money/wants", { name: "AirPods", priceCents: 20000 });
+check("Bob adds a want (3-day wait at €200)", want.status === 201 && Date.parse(want.body.want.readyAt) - Date.parse(want.body.want.createdAt) === 72 * 3600000, JSON.stringify(want.body));
+const ownerWant = await owner("POST", "/money/wants", { name: "Owner lamp", priceCents: 3000 });
+check("owner adds a want (1-day wait)", ownerWant.status === 201);
+const wl = (await bob("GET", "/money/wants")).body;
+check("Bob sees only his wants", wl.waiting.length === 1 && wl.waiting[0].name === "AirPods" && wl.savedCents === 0, JSON.stringify(wl));
+for (const [name, fn] of [
+  ["buy owner's want", () => bob("POST", `/money/wants/${ownerWant.body.want.id}/buy`, { categoryId: bobCat.body.category.id })],
+  ["skip owner's want", () => bob("POST", `/money/wants/${ownerWant.body.want.id}/skip`)],
+  ["delete owner's want", () => bob("DELETE", `/money/wants/${ownerWant.body.want.id}`)],
+]) {
+  const r = await fn();
+  check(`Bob can't ${name} (404)`, r.status === 404, `got ${r.status}`);
+}
+const bought = await bob("POST", `/money/wants/${want.body.want.id}/buy`, { categoryId: bobCat.body.category.id });
+check("buying logs one expense", bought.status === 200 && typeof bought.body.expenseId === "string", JSON.stringify(bought.body));
+check("buying twice (409)", (await bob("POST", `/money/wants/${want.body.want.id}/buy`, { categoryId: bobCat.body.category.id })).status === 409);
+const agentWant = await agent("POST", "/agent/money/wants", { name: "Lamp", amount: "39,90" });
+check("agent adds a want with speech", agentWant.status === 201 && agentWant.body.speech === "Added Lamp (€39.90) to your want list. Ask me again in 1 day.", JSON.stringify(agentWant.body));
+check("agent unknown want (404, Bob's list only)", (await agent("POST", "/agent/money/wants/skip", { name: "Owner lamp" })).status === 404);
+const agentSkip = await agent("POST", "/agent/money/wants/skip", { name: "lamp" });
+check("agent skips a want", agentSkip.status === 200 && agentSkip.body.speech === "Skipped Lamp. Saved €39.90 by waiting.", JSON.stringify(agentSkip.body));
+check("saved by waiting adds up", (await bob("GET", "/money/wants")).body.savedCents === 3990);
+await owner("PATCH", `/admin/users/${bobMe.id}`, { extras: ["wins", "kind_streaks", "nudges", "home_today"] });
+check("Want list off: browser 403", (await bob("GET", "/money/wants")).status === 403);
+check("Want list off: agent 403", (await agent("POST", "/agent/money/wants", { name: "x", amount: 1 })).status === 403);
+await owner("PATCH", `/admin/users/${bobMe.id}`, { extras: ["wants", "wins", "kind_streaks", "nudges", "home_today"] });
 check("Bob's agent can't see owner's habits", !JSON.stringify(plan.body).includes(`${oh}`));
 const bobExport3 = (await bob("GET", "/export")).body;
 check("export is version 3 with Bob's planner only", bobExport3.version === 3 && bobExport3.planner.habits.length === 2 && !JSON.stringify(bobExport3.planner).includes(`${oh}`), JSON.stringify(bobExport3.planner?.habits?.map((h) => h.name)));

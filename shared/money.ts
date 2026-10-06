@@ -207,3 +207,10 @@ export function paceSeries(p: {
   }
   return out;
 }
+
+/** Want-list cooling-off: under €50 one day, up to €200 three days, above that a week. */
+export function waitHours(priceCents: number): 24 | 72 | 168 {
+  if (priceCents < 5000) return 24;
+  if (priceCents <= 20000) return 72;
+  return 168;
+}

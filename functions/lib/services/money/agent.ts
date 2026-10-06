@@ -25,7 +25,7 @@ import { getOverview } from "./overview";
 // Voice-agent side of Money. The agent (Hermes) does the language work and sends a
 // category name; this file matches it, falls back to Other, and writes the reply.
 
-async function resolveCategory(db: Db, userId: string, requested: string) {
+export async function resolveCategory(db: Db, userId: string, requested: string) {
   const all = await listCategories(db, userId);
   const active = all.filter((c) => !c.archived);
   const match = findCategoryByName(active, requested);

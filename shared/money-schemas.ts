@@ -47,6 +47,38 @@ export const agentAmountSchema = z
   ])
   .refine((n) => eurosToCents(n) !== null, AMOUNT_MESSAGE);
 
+const wantName = z.string().trim().min(1, "Name is required").max(120);
+const url = z
+  .string()
+  .trim()
+  .max(500)
+  .regex(/^https?:\/\//, "Links must start with http:// or https://");
+
+export const wantCreateSchema = z.object({ name: wantName, priceCents: amount, url: url.nullable().optional() });
+export const wantBuySchema = z.object({ categoryId: id, spentOn: dateSchema.optional(), priceCents: amount.optional() });
+export const agentWantCreateSchema = z.object({ name: wantName, amount: agentAmountSchema });
+export const agentWantNameSchema = z.object({ name: wantName });
+export const agentWantBuySchema = z.object({
+  name: wantName,
+  category: z.string().trim().min(1).max(80),
+  amount: agentAmountSchema.optional(),
+});
+
+export type WantCreate = z.infer<typeof wantCreateSchema>;
+export type WantBuy = z.infer<typeof wantBuySchema>;
+export type WantRow = {
+  id: string;
+  name: string;
+  priceCents: number;
+  url: string | null;
+  createdAt: string;
+  readyAt: string;
+  status: "waiting" | "bought" | "skipped";
+  decidedAt: string | null;
+  expenseId: string | null;
+};
+export type WantsView = { waiting: WantRow[]; decided: WantRow[]; savedCents: number };
+
 /** Voice agents speak euros, not cents: { category: "Food", amount: 12.4 }. */
 export const agentExpenseCreateSchema = z.object({
   category: z.string().trim().min(1, "Category is required").max(80),

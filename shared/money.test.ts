@@ -14,6 +14,7 @@ import {
   paceSeries,
   parseEuroToCents,
   planBillOccurrences,
+  waitHours,
 } from "./money";
 
 describe("dueDateFor", () => {
@@ -191,5 +192,15 @@ describe("findCategoryByName", () => {
   it("returns undefined when nothing matches", () => {
     expect(findCategoryByName(cats, "Gifts")).toBeUndefined();
     expect(findCategoryByName([], "Food")).toBeUndefined();
+  });
+});
+
+describe("waitHours", () => {
+  it("waits longer for pricier things", () => {
+    expect(waitHours(1)).toBe(24);
+    expect(waitHours(4999)).toBe(24);
+    expect(waitHours(5000)).toBe(72);
+    expect(waitHours(20000)).toBe(72);
+    expect(waitHours(20001)).toBe(168);
   });
 });

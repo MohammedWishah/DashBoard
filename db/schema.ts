@@ -135,6 +135,23 @@ export const expenses = sqliteTable(
   ],
 );
 
+export const wants = sqliteTable(
+  "wants",
+  {
+    id: text("id").primaryKey(),
+    userId: owner(),
+    name: text("name").notNull(),
+    priceCents: integer("price_cents").notNull(),
+    url: text("url"),
+    createdAt: text("created_at").notNull(),
+    readyAt: text("ready_at").notNull(),
+    status: text("status", { enum: ["waiting", "bought", "skipped"] }).notNull().default("waiting"),
+    decidedAt: text("decided_at"),
+    expenseId: text("expense_id").references(() => expenses.id, { onDelete: "set null" }),
+  },
+  (t) => [index("wants_user_idx").on(t.userId)],
+);
+
 export const income = sqliteTable(
   "income",
   {

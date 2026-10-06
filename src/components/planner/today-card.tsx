@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { CaretLeft, CaretRight, Check, Fire } from "@phosphor-icons/react";
 import { format, parseISO } from "date-fns";
-import { MAX_DAY_TASKS, addDays } from "@shared/planner";
+import { MAX_DAY_TASKS, addDays, mondayOf } from "@shared/planner";
 import type { DayHabit, DayView } from "@shared/planner-schemas";
 import { panel } from "@/components/money/summary";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,8 @@ export function TodayCard({ date, today, onDate }: { date: string; today: string
   const day = useDay(date);
   const d = day.data;
   const dailyDone = d ? d.habits.daily.filter((h) => h.checked).length : 0;
+  const sameWeek = mondayOf(date) === mondayOf(today);
+  const sameMonth = date.slice(0, 7) === today.slice(0, 7);
   return (
     <section className={cn(panel, "grid min-w-0 gap-5 p-5")} aria-labelledby="today-title">
       <header className="flex flex-wrap items-center justify-between gap-2">
@@ -51,8 +53,8 @@ export function TodayCard({ date, today, onDate }: { date: string; today: string
             ) : (
               <>
                 <HabitChecklist habits={d.habits.daily} date={d.date} />
-                {d.habits.weekly.length > 0 && <HabitChecklist title="This week" habits={d.habits.weekly} date={d.date} />}
-                {d.habits.monthly.length > 0 && <HabitChecklist title="This month" habits={d.habits.monthly} date={d.date} />}
+                {d.habits.weekly.length > 0 && <HabitChecklist title={sameWeek ? "This week" : "That week"} habits={d.habits.weekly} date={d.date} />}
+                {d.habits.monthly.length > 0 && <HabitChecklist title={sameMonth ? "This month" : "That month"} habits={d.habits.monthly} date={d.date} />}
               </>
             )}
           </div>
@@ -62,7 +64,7 @@ export function TodayCard({ date, today, onDate }: { date: string; today: string
   );
 }
 
-function TopThree({ day }: { day: DayView }) {
+export function TopThree({ day }: { day: DayView }) {
   // Typing and ticking both save the whole list through one queued mutation, so saves land in
   // order and a tick never races an edit (the server re-creates rows on every save).
   const save = useSaveTasks();
@@ -86,6 +88,12 @@ function TopThree({ day }: { day: DayView }) {
     lastSent.current = key;
     save.mutate({ date: day.date, tasks });
   }
+
+  // Autosave 800 ms after typing stops, so nothing is lost when leaving the page.
+  useEffect(() => {
+    const t = setTimeout(() => persist(drafts), 800);
+    return () => clearTimeout(t);
+  }, [drafts]);
 
   function setDone(i: number, done: boolean) {
     const next = drafts.map((x, j) => (j === i ? { ...x, done } : x));
@@ -131,7 +139,7 @@ const slots = (day: DayView): Draft[] =>
 /** What gets saved: filled slots only, trimmed, in order. */
 const clean = (drafts: Draft[]) => drafts.filter((t) => t.text.trim()).map((t) => ({ text: t.text.trim(), done: t.done }));
 
-function HabitChecklist({ title, habits, date }: { title?: string; habits: DayHabit[]; date: string }) {
+export function HabitChecklist({ title, habits, date }: { title?: string; habits: DayHabit[]; date: string }) {
   const toggle = useToggleCheck();
   return (
     <div className="grid gap-1.5">

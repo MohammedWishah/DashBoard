@@ -86,8 +86,10 @@ function DailyGrid({ m }: { m: MonthView }) {
               const set = new Set(r.checks);
               return (
                 <tr key={r.habit.id}>
-                  <th scope="row" className="sticky left-0 z-10 max-w-36 truncate bg-card pr-3 text-left text-sm font-normal">
-                    {r.habit.name}
+                  <th scope="row" className="sticky left-0 z-10 bg-card pr-3 text-left text-sm font-normal">
+                    <span className="block max-w-36 truncate" title={r.habit.name}>
+                      {r.habit.name}
+                    </span>
                   </th>
                   {m.days.map((d) => (
                     <td key={d} className={cn("p-0", d === m.today && "rounded-[6px] shadow-[inset_0_0_0_1px_var(--ring)]")}>
@@ -175,8 +177,10 @@ function WeeklyGrid({ m }: { m: MonthView }) {
             <tbody>
               {m.weekly.map((r) => (
                 <tr key={r.habit.id}>
-                  <th scope="row" className="max-w-36 truncate pr-3 text-left text-sm font-normal">
-                    {r.habit.name}
+                  <th scope="row" className="pr-3 text-left text-sm font-normal">
+                    <span className="block max-w-36 truncate" title={r.habit.name}>
+                      {r.habit.name}
+                    </span>
                   </th>
                   {r.weeks.map((w) => (
                     <td key={w.monday} className="text-center">

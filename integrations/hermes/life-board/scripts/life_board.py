@@ -21,6 +21,11 @@ import urllib.parse
 import urllib.request
 
 
+def euros(text):
+    """'12,40' or '12.40' -> 12.4. argparse turns a ValueError into a clean usage error."""
+    return float(text.strip().replace(",", "."))
+
+
 def emit(raw):
     # Pass the server's UTF-8 through as bytes, so "€" survives any console encoding.
     sys.stdout.buffer.write(raw.rstrip(b"\n") + b"\n")
@@ -58,7 +63,7 @@ def main():
     sub = p.add_subparsers(dest="cmd", required=True)
     log = sub.add_parser("log")
     log.add_argument("--category", required=True)
-    log.add_argument("--amount", required=True, type=float, help="euros, e.g. 12.40")
+    log.add_argument("--amount", required=True, type=euros, help="euros, e.g. 12.40 or 12,40")
     log.add_argument("--note")
     log.add_argument("--date", help="YYYY-MM-DD, default today")
     undo = sub.add_parser("undo")

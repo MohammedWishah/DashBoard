@@ -190,6 +190,9 @@ check("owner's month has the tick", ownerMonth.daily.some((r) => r.habit.id === 
 check("unticking twice is a no-op (200)", (await owner("DELETE", `/planner/habits/${oh}/checks/${today}`)).status === 200 && (await owner("DELETE", `/planner/habits/${oh}/checks/${today}`)).status === 200);
 check("owner's task untouched", (await owner("GET", `/planner/day?date=${today}`)).body.tasks[0].done === false);
 check("empty top 3 clears the day", (await owner("PUT", `/planner/day/${today}/tasks`, { tasks: [] })).body.tasks.length === 0);
+await owner("PATCH", `/planner/habits/${oh}`, { archived: true });
+check("ticking an archived habit (409)", (await owner("PUT", `/planner/habits/${oh}/checks/${today}`)).status === 409);
+await owner("PATCH", `/planner/habits/${oh}`, { archived: false });
 
 // ---- agent tokens reach only their owner
 const tok = await bob("POST", "/agent-tokens", { name: "Bob's speaker" });
@@ -223,6 +226,9 @@ const lastMonth = await agent("POST", "/agent/money/expenses", { category: "Food
 check("agent can backdate; speech names the date, no 'this month' line", lastMonth.status === 201 && lastMonth.body.expense.spentOn === "2026-09-15" && lastMonth.body.speech === "Logged €3.00 in Food on 2026-09-15.", JSON.stringify(lastMonth.body));
 check("sub-cent amount rejected (400)", (await agent("POST", "/agent/money/expenses", { category: "Food", amount: 1.234 })).status === 400);
 check("euros over 100000 rejected (400)", (await agent("POST", "/agent/money/expenses", { category: "Food", amount: 100000.01 })).status === 400);
+const commaAmount = await agent("POST", "/agent/money/expenses", { category: "Food", amount: "12,40" });
+check("agent amount '12,40' -> 1240 cents", commaAmount.status === 201 && commaAmount.body.expense.amountCents === 1240, JSON.stringify(commaAmount.body));
+await agent("DELETE", `/agent/money/expenses/${commaAmount.body.expense.id}`);
 const unknown = await agent("POST", "/agent/money/expenses", { category: `OwnerOnly ${run}`, amount: 5 });
 check("owner's category name is unknown to Bob (404)", unknown.status === 404 && unknown.body.error.code === "unknown_category", JSON.stringify(unknown.body));
 check("unknown_category lists only Bob's categories", Array.isArray(unknown.body.error.details?.categories) && unknown.body.error.details.categories.includes("Food") && !unknown.body.error.details.categories.includes(`OwnerOnly ${run}`), JSON.stringify(unknown.body.error.details));

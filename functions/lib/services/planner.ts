@@ -120,6 +120,9 @@ export async function findHabitByName(db: Db, userId: string, name: string): Pro
 
 export async function setCheck(db: Db, userId: string, habitId: string, period: string, checked: boolean, today = berlinToday()) {
   const habit = await getHabit(db, userId, habitId);
+  if (checked && habit.archived) {
+    throw new ApiError(409, "habit_archived", `${habit.name} is archived. Restore it to tick it again.`);
+  }
   if (!isValidPeriod(habit.frequency, period)) {
     const hint = habit.frequency === "weekly" ? "a Monday" : habit.frequency === "monthly" ? "the 1st of a month" : "a date";
     throw new ApiError(400, "invalid_period", `${habit.name} is ${habit.frequency}, so the period must be ${hint}`);

@@ -33,12 +33,24 @@ export const categoryUpdateSchema = z
 export const expenseCreateSchema = z.object({ categoryId: id, amountCents: amount, spentOn: dateSchema, note });
 export const expenseUpdateSchema = expenseCreateSchema.partial().strict();
 
+const AMOUNT_MESSAGE = "Amount must be euros from 0.01 to 100000, with at most 2 decimals";
+
+/** Euros from a voice agent: 12.4, "12.40" or "12,40". Always comes out as a number of euros. */
+export const agentAmountSchema = z
+  .union([
+    z.number(),
+    z
+      .string()
+      .trim()
+      .regex(/^\d+([.,]\d{1,2})?$/, AMOUNT_MESSAGE)
+      .transform((s) => Number(s.replace(",", "."))),
+  ])
+  .refine((n) => eurosToCents(n) !== null, AMOUNT_MESSAGE);
+
 /** Voice agents speak euros, not cents: { category: "Food", amount: 12.4 }. */
 export const agentExpenseCreateSchema = z.object({
   category: z.string().trim().min(1, "Category is required").max(80),
-  amount: z
-    .number()
-    .refine((n) => eurosToCents(n) !== null, "Amount must be euros from 0.01 to 100000, with at most 2 decimals"),
+  amount: agentAmountSchema,
   spentOn: dateSchema.optional(),
   note,
 });

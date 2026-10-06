@@ -1,4 +1,4 @@
-import type { Feature } from "../../shared/features";
+import type { Extra, Feature } from "../../shared/features";
 
 export type Bindings = {
   DB: D1Database;
@@ -12,5 +12,5 @@ export type Bindings = {
 
 export type AppEnv = {
   Bindings: Bindings;
-  Variables: { userId: string; email: string; isAdmin: boolean; features: Feature[] };
+  Variables: { userId: string; email: string; isAdmin: boolean; features: Feature[]; extras: Extra[] };
 };

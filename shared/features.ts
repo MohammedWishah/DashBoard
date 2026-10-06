@@ -22,3 +22,31 @@ export const isFeature = (v: unknown): v is Feature => typeof v === "string" && 
 export function effectiveFeatures(isAdmin: boolean, stored: readonly string[]): Feature[] {
   return isAdmin ? [...FEATURES] : FEATURES.filter((f) => stored.includes(f));
 }
+
+/** Small optional helpers inside sections. Off by default, switched on per person (admin too). */
+export const EXTRAS = ["home_today", "kind_streaks", "wins", "wants", "nudges"] as const;
+export type Extra = (typeof EXTRAS)[number];
+
+export const EXTRA_LABELS: Record<Extra, string> = {
+  home_today: "Today on Home",
+  kind_streaks: "Forgiving streaks",
+  wins: "Wins",
+  wants: "Want list",
+  nudges: "Hermes nudges",
+};
+
+/** The section an extra lives in. It only works while that section is on. */
+export const EXTRA_REQUIRES: Record<Extra, Feature | null> = {
+  home_today: "planner",
+  kind_streaks: "planner",
+  wins: "planner",
+  wants: "money",
+  nudges: null,
+};
+
+export const isExtra = (v: unknown): v is Extra => typeof v === "string" && (EXTRAS as readonly string[]).includes(v);
+
+/** Stored extras that can work right now, given the person's sections. */
+export function effectiveExtras(stored: readonly string[], sections: readonly Feature[]): Extra[] {
+  return EXTRAS.filter((e) => stored.includes(e) && (EXTRA_REQUIRES[e] === null || sections.includes(EXTRA_REQUIRES[e]!)));
+}

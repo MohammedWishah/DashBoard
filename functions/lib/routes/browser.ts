@@ -19,7 +19,13 @@ const tokenNameSchema = z.object({ name: z.string().trim().min(1, "Name the toke
 
 export const browserRoutes = new Hono<AppEnv>()
   .get("/me", (c) =>
-    c.json({ id: c.get("userId"), email: c.get("email"), isAdmin: c.get("isAdmin"), features: c.get("features") }),
+    c.json({
+      id: c.get("userId"),
+      email: c.get("email"),
+      isAdmin: c.get("isAdmin"),
+      features: c.get("features"),
+      extras: c.get("extras"),
+    }),
   )
 
   .get("/projects", async (c) => c.json({ projects: await listProjects(getDb(c.env.DB), c.get("userId")) }))

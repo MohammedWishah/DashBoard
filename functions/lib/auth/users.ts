@@ -13,7 +13,7 @@ import {
   shippedEvents,
   users,
 } from "../../../db/schema";
-import { effectiveFeatures } from "../../../shared/features";
+import { effectiveExtras, effectiveFeatures } from "../../../shared/features";
 import { nowIso } from "../../../shared/time";
 import type { Db } from "../db";
 
@@ -89,5 +89,7 @@ export async function ensureUser(db: Db, userId: string, email: string, ownerEma
 export async function accessFor(db: Db, userId: string, email: string, ownerEmail?: string) {
   const row = await db.select({ features: users.features }).from(users).where(eq(users.id, userId)).get();
   const isAdmin = isOwner(email, ownerEmail);
-  return { isAdmin, features: effectiveFeatures(isAdmin, row?.features ?? []) };
+  const stored = row?.features ?? [];
+  const features = effectiveFeatures(isAdmin, stored);
+  return { isAdmin, features, extras: effectiveExtras(stored, features) };
 }

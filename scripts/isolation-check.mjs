@@ -71,10 +71,20 @@ check("non-admin can't grant themselves (403)", (await bob("PATCH", `/admin/user
 const people = (await owner("GET", "/admin/users")).body.users;
 check("admin sees Bob in the people list", people.some((u) => u.id === bobMe.id));
 check("admin can't change their own features (400)", (await owner("PATCH", `/admin/users/${ownerMe.id}`, { features: [] })).status === 400);
+check("admin can toggle their own extras", (await owner("PATCH", `/admin/users/${ownerMe.id}`, { extras: ["home_today", "kind_streaks", "wins", "wants", "nudges"] })).status === 200);
+check("admin /me shows extras", JSON.stringify((await owner("GET", "/me")).body.extras) === JSON.stringify(["home_today", "kind_streaks", "wins", "wants", "nudges"]));
+check("new person has no extras", JSON.stringify(bobMe.extras) === "[]", JSON.stringify(bobMe));
+check("non-admin can't toggle extras (403)", (await bob("PATCH", `/admin/users/${bobMe.id}`, { extras: ["wants"] })).status === 403);
+check("unknown extra rejected (400)", (await owner("PATCH", `/admin/users/${bobMe.id}`, { extras: ["root"] })).status === 400);
+check("empty PATCH body rejected (400)", (await owner("PATCH", `/admin/users/${bobMe.id}`, {})).status === 400);
 check("unknown feature rejected (400)", (await owner("PATCH", `/admin/users/${bobMe.id}`, { features: ["root"] })).status === 400);
 const grant = await owner("PATCH", `/admin/users/${bobMe.id}`, { features: ["money", "planner", "projects"] });
 check("admin grants Bob Projects", grant.status === 200 && grant.body.user.features.includes("projects"));
 check("grant applies immediately", (await bob("GET", "/projects")).status === 200);
+await owner("PATCH", `/admin/users/${bobMe.id}`, { extras: ["wants", "wins", "kind_streaks", "nudges", "home_today"] });
+const regrant = await owner("PATCH", `/admin/users/${bobMe.id}`, { features: ["money", "planner", "projects"] });
+check("changing sections keeps extras", regrant.body.user.extras.length === 5, JSON.stringify(regrant.body));
+check("Bob's /me has his extras", (await bob("GET", "/me")).body.extras.includes("wants"));
 
 // ---- the owner received the data from before multi-user
 const ownerStart = (await owner("GET", "/projects")).body.projects;
@@ -196,6 +206,7 @@ check("token list never includes the secret", listed.length >= 1 && !JSON.string
 await owner("PATCH", `/admin/users/${bobMe.id}`, { features: ["planner", "projects"] });
 check("Money removed: overview 403", (await bob("GET", "/money/overview")).status === 403);
 check("Money removed: agent money 403", (await agent("GET", "/agent/money/left")).status === 403);
+check("Money off hides the Want list extra", !(await bob("GET", "/me")).body.extras.includes("wants"));
 check("Projects still allowed for agent", (await agent("GET", "/agent/projects")).status === 200);
 await owner("PATCH", `/admin/users/${bobMe.id}`, { features: ["money", "projects"] });
 check("Planner removed: browser 403", (await bob("GET", "/planner/day")).status === 403);

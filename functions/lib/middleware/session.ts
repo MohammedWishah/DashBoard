@@ -18,5 +18,6 @@ export const requireUser = createMiddleware<AppEnv>(async (c, next) => {
   c.set("email", email);
   c.set("isAdmin", access.isAdmin);
   c.set("features", access.features);
+  c.set("extras", access.extras);
   await next();
 });

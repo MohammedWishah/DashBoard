@@ -31,6 +31,11 @@ const check = (name, ok, detail = "") => {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${ok ? "" : `  ${detail}`}`);
   if (!ok) failures++;
 };
+const periodMonday = (date) => {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return d.toISOString().slice(0, 10);
+};
 
 function client(bearer) {
   return async (method, path, body) => {
@@ -223,6 +228,25 @@ check("agent undo removes the expense", undo.status === 200 && undo.body.speech 
 check("undo twice -> 404", (await agent("DELETE", `/agent/money/expenses/${logged.body.expense.id}`)).status === 404);
 const ownerStillHas = (await owner("GET", "/money/expenses?month=2026-10")).body.expenses.some((e) => e.id === ownerExpense.body.expense.id);
 check("owner's expense untouched", ownerStillHas);
+// ---- planner (agent)
+const gymTick = await agent("POST", "/agent/planner/habits/check", { habit: "gym" });
+check("agent ticks weekly habit for this week", gymTick.status === 200 && gymTick.body.frequency === "weekly" && gymTick.body.period === periodMonday(today) && gymTick.body.speech.startsWith("Ticked Gym for this week."), JSON.stringify(gymTick.body));
+const readTick = await agent("POST", "/agent/planner/habits/check", { habit: ` read ${run} ` });
+check("agent ticks daily habit for today", readTick.status === 200 && readTick.body.period === today && /🔥 1 day\b/.test(readTick.body.speech), JSON.stringify(readTick.body));
+const unknownHabit = await agent("POST", "/agent/planner/habits/check", { habit: "meditate" });
+check("unknown habit -> 404 with Bob's list only", unknownHabit.status === 404 && unknownHabit.body.error.code === "unknown_habit" && unknownHabit.body.error.details.habits.some((h) => h.name === "Gym") && !JSON.stringify(unknownHabit.body).includes("Owner"), JSON.stringify(unknownHabit.body));
+const top = await agent("PUT", "/agent/planner/tasks", { tasks: ["Call the bank", "Finish report"] });
+check("agent sets top 3", top.status === 200 && top.body.tasks.length === 2 && top.body.speech === "Top 3 for today: Call the bank, Finish report.", JSON.stringify(top.body));
+check("agent top 3 over 3 rejected (400)", (await agent("PUT", "/agent/planner/tasks", { tasks: ["a", "b", "c", "d"] })).status === 400);
+const done = await agent("POST", "/agent/planner/tasks/done", { task: "call the BANK" });
+check("agent marks a task done by text", done.status === 200 && done.body.task.done === true && done.body.speech === "Done: Call the bank. 1 of 2 done.", JSON.stringify(done.body));
+check("agent marks a task done by position", (await agent("POST", "/agent/planner/tasks/done", { task: "2" })).body?.task?.text === "Finish report");
+check("unknown task -> 404", (await agent("POST", "/agent/planner/tasks/done", { task: "nope" })).status === 404);
+const plan = await agent("GET", "/agent/planner/today");
+check("agent reads the plan", plan.status === 200 && plan.body.speech.startsWith("Top 3: Call the bank (done), Finish report (done).") && plan.body.speech.includes("All daily habits done."), plan.body?.speech);
+const untick = await agent("DELETE", "/agent/planner/habits/check", { habit: "Gym" });
+check("agent unticks", untick.status === 200 && untick.body.checked === false && untick.body.speech === "Unticked Gym for this week.", JSON.stringify(untick.body));
+check("Bob's agent can't see owner's habits", !JSON.stringify(plan.body).includes(`${oh}`));
 
 await bob("DELETE", `/agent-tokens/${tok.body.id}`);
 check("revoked token stops working", (await agent("GET", "/agent/projects")).status === 401);

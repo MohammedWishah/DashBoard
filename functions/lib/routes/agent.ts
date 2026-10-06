@@ -1,10 +1,12 @@
 import { Hono } from "hono";
 import { agentExpenseCreateSchema } from "../../../shared/money-schemas";
+import { agentHabitCheckSchema, agentTaskDoneSchema, agentTasksSchema } from "../../../shared/planner-schemas";
 import { shipProjectSchema, updateProjectSchema } from "../../../shared/schemas";
 import { getDb } from "../db";
 import type { AppEnv } from "../env";
 import { logAgentExpense, undoAgentExpense } from "../services/money/agent";
 import { getMoneyLeft } from "../services/money/overview";
+import { agentCheck, agentSetTasks, agentTaskDone, agentToday } from "../services/planner-agent";
 import { listProjects, resolveProjectRef, shipProject, updateProject } from "../services/projects";
 import { validate } from "../validate";
 
@@ -44,4 +46,21 @@ export const agentRoutes = new Hono<AppEnv>()
   // "Undo that", with the id from the POST reply.
   .delete("/money/expenses/:id", async (c) =>
     c.json(await undoAgentExpense(getDb(c.env.DB), c.get("userId"), c.req.param("id"))),
+  )
+  // "What's my plan today?"
+  .get("/planner/today", async (c) => c.json(await agentToday(getDb(c.env.DB), c.get("userId"))))
+  // "did gym": ticks today, this week or this month, depending on the habit.
+  .post("/planner/habits/check", validate("json", agentHabitCheckSchema), async (c) =>
+    c.json(await agentCheck(getDb(c.env.DB), c.get("userId"), c.req.valid("json"), true)),
+  )
+  .delete("/planner/habits/check", validate("json", agentHabitCheckSchema), async (c) =>
+    c.json(await agentCheck(getDb(c.env.DB), c.get("userId"), c.req.valid("json"), false)),
+  )
+  // "top 3: A, B, C" replaces the day's list.
+  .put("/planner/tasks", validate("json", agentTasksSchema), async (c) =>
+    c.json(await agentSetTasks(getDb(c.env.DB), c.get("userId"), c.req.valid("json"))),
+  )
+  // "done with A", or by position "2".
+  .post("/planner/tasks/done", validate("json", agentTaskDoneSchema), async (c) =>
+    c.json(await agentTaskDone(getDb(c.env.DB), c.get("userId"), c.req.valid("json"))),
   );

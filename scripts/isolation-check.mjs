@@ -276,6 +276,28 @@ const classicRead = (await bob("GET", `/planner/day?date=${today}`)).body.habits
 check("classic streak without the extra", classicRead.streak === 0 && classicRead.atRisk === false && classicRead.total === null, JSON.stringify(classicRead));
 await owner("PATCH", `/admin/users/${bobMe.id}`, { extras: ["wants", "wins", "kind_streaks", "nudges", "home_today"] });
 await bob("PUT", `/planner/habits/${rid}/checks/${today}`);
+// ---- habit extras + energy
+const tinyHabit = await bob("POST", "/planner/habits", { name: `Stretch ${run}`, frequency: "daily", tiny: "One stretch", timeOfDay: "morning" });
+check("habit keeps tiny and time of day", tinyHabit.status === 201 && tinyHabit.body?.habit?.tiny === "One stretch" && tinyHabit.body?.habit?.timeOfDay === "morning", JSON.stringify(tinyHabit.body));
+const cleared = await bob("PATCH", `/planner/habits/${tinyHabit.body?.habit?.id}`, { tiny: "" });
+check("empty tiny clears it", cleared.body?.habit?.tiny === null, JSON.stringify(cleared.body));
+const bobHabitIds = ((await bob("GET", "/planner/habits")).body?.habits ?? []).map((h) => h.id);
+check("reorder own habits", (await bob("PUT", "/planner/habits/order", { ids: [...bobHabitIds].reverse() })).status === 200);
+check("reorder with someone else's id (404)", (await bob("PUT", "/planner/habits/order", { ids: [oh] })).status === 404);
+check("energy off: 403", (await bob("PUT", `/planner/energy/${today}`, { level: "high" })).status === 403);
+await owner("PATCH", `/admin/users/${bobMe.id}`, { extras: ["wants", "wins", "kind_streaks", "nudges", "home_today", "tiny_habits", "time_of_day", "energy"] });
+check("energy for today", (await bob("PUT", `/planner/energy/${today}`, { level: "low" })).status === 200);
+check("energy overwrite is an upsert", (await bob("PUT", `/planner/energy/${today}`, { level: "high" })).status === 200 && (await bob("GET", `/planner/day?date=${today}`)).body?.energy === "high");
+check("energy for tomorrow (400)", (await bob("PUT", `/planner/energy/${tomorrow}`, { level: "ok" })).status === 400);
+const agentEnergy = await agent("POST", "/agent/planner/energy", { level: "ok" });
+check("agent logs energy", agentEnergy.status === 200 && agentEnergy.body?.speech === "Logged energy: ok for today.", JSON.stringify(agentEnergy.body));
+await owner("PUT", `/planner/energy/${today}`, { level: "low" });
+check("energy is per person", (await owner("GET", `/planner/day?date=${today}`)).body?.energy === "low" && (await bob("GET", `/planner/day?date=${today}`)).body?.energy === "ok");
+await owner("PATCH", `/planner/habits/${oh}`, { archived: true });
+const archivedRow = ((await owner("GET", "/planner/habits")).body?.habits ?? []).find((h) => h.id === oh);
+check("archiving stamps archivedAt", typeof archivedRow?.archivedAt === "string", JSON.stringify(archivedRow));
+await owner("PATCH", `/planner/habits/${oh}`, { archived: false });
+check("restoring clears archivedAt", ((await owner("GET", "/planner/habits")).body?.habits ?? []).find((h) => h.id === oh)?.archivedAt === null);
 // ---- want list
 const want = await bob("POST", "/money/wants", { name: "AirPods", priceCents: 20000 });
 check("Bob adds a want (3-day wait at €200)", want.status === 201 && Date.parse(want.body.want.readyAt) - Date.parse(want.body.want.createdAt) === 72 * 3600000, JSON.stringify(want.body));
@@ -325,7 +347,7 @@ check("nudges off: silent, not 403", silent.status === 200 && silent.body.messag
 await owner("PATCH", `/admin/users/${bobMe.id}`, { extras: ["wants", "wins", "kind_streaks", "nudges", "home_today"] });
 check("Bob's agent can't see owner's habits", !JSON.stringify(plan.body).includes(`${oh}`));
 const bobExport3 = (await bob("GET", "/export")).body;
-check("export is version 3 with Bob's planner only", bobExport3.version === 3 && bobExport3.planner.habits.length === 2 && !JSON.stringify(bobExport3.planner).includes(`${oh}`), JSON.stringify(bobExport3.planner?.habits?.map((h) => h.name)));
+check("export is version 3 with Bob's planner only", bobExport3.version === 3 && bobExport3.planner.habits.length === 3 && !JSON.stringify(bobExport3.planner).includes(`${oh}`), JSON.stringify(bobExport3.planner?.habits?.map((h) => h.name)));
 
 await bob("DELETE", `/agent-tokens/${tok.body.id}`);
 check("revoked token stops working", (await agent("GET", "/agent/projects")).status === 401);
@@ -339,9 +361,9 @@ check("Bob's import left owner's projects alone", (await owner("GET", "/projects
 const reimported = (await bob("GET", "/projects")).body.projects;
 check("import gave rows new ids", reimported.length === 1 && reimported[0].id !== bobProj.body.project.id);
 const imp3 = await bob("POST", "/import", bobExport3);
-check("version 3 import restores planner", imp3.status === 200 && imp3.body.imported.habits === 2, JSON.stringify(imp3.body));
+check("version 3 import restores planner", imp3.status === 200 && imp3.body?.imported?.habits === 3, JSON.stringify(imp3.body));
 const bobHabitsAfter = (await bob("GET", "/planner/habits")).body.habits;
-check("imported habits got new ids", bobHabitsAfter.length === 2 && bobHabitsAfter.every((h) => h.id !== bobGym.body.habit.id && h.id !== bobRead.body.habit.id));
+check("imported habits got new ids", bobHabitsAfter.length === 3 && bobHabitsAfter.every((h) => h.id !== bobGym.body.habit.id && h.id !== bobRead.body.habit.id));
 check("owner's habits untouched by Bob's import", (await owner("GET", "/planner/habits")).body.habits.some((h) => h.id === oh));
 
 console.log(failures === 0 ? "\nAll isolation checks passed." : `\n${failures} check(s) FAILED.`);

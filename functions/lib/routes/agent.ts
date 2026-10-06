@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { agentExpenseCreateSchema, agentWantBuySchema, agentWantCreateSchema, agentWantNameSchema } from "../../../shared/money-schemas";
-import { agentHabitCheckSchema, agentTaskDoneSchema, agentTasksSchema } from "../../../shared/planner-schemas";
+import { agentEnergySchema, agentHabitCheckSchema, agentTaskDoneSchema, agentTasksSchema } from "../../../shared/planner-schemas";
 import { shipProjectSchema, updateProjectSchema } from "../../../shared/schemas";
 import { getDb } from "../db";
 import { ApiError } from "../errors";
@@ -9,7 +9,7 @@ import { logAgentExpense, undoAgentExpense } from "../services/money/agent";
 import { getMoneyLeft } from "../services/money/overview";
 import { agentAddWant, agentBuyWant, agentSkipWant } from "../services/money/wants";
 import { getBriefing } from "../services/briefing";
-import { agentCheck, agentSetTasks, agentTaskDone, agentToday } from "../services/planner-agent";
+import { agentCheck, agentEnergy, agentSetTasks, agentTaskDone, agentToday } from "../services/planner-agent";
 import { listProjects, resolveProjectRef, shipProject, updateProject } from "../services/projects";
 import { validate } from "../validate";
 
@@ -88,4 +88,8 @@ export const agentRoutes = new Hono<AppEnv>()
       extras: c.get("extras"),
     });
     return c.json({ message });
-  });
+  })
+  // "energy high"
+  .post("/planner/energy", validate("json", agentEnergySchema), async (c) =>
+    c.json(await agentEnergy(getDb(c.env.DB), c.get("userId"), c.req.valid("json"))),
+  );

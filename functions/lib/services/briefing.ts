@@ -25,13 +25,22 @@ export async function getBriefing(
   const money = ctx.sections.includes("money");
   const wantsOn = ctx.extras.includes("wants");
 
-  const day = planner ? await getDay(db, userId, today, now, ctx.extras.includes("kind_streaks")) : null;
-  const habit = (h: { name: string; checked: boolean; streak: number; atRisk: boolean; frequency: "daily" | "weekly" | "monthly" }) => ({
+  const energyOn = ctx.extras.includes("energy");
+  const day = planner ? await getDay(db, userId, today, now, ctx.extras.includes("kind_streaks"), energyOn) : null;
+  const habit = (h: {
+    name: string;
+    checked: boolean;
+    streak: number;
+    atRisk: boolean;
+    frequency: "daily" | "weekly" | "monthly";
+    timeOfDay: "morning" | "afternoon" | "evening" | "any";
+  }) => ({
     name: h.name,
     checked: h.checked,
     streak: h.streak,
     atRisk: h.atRisk,
     frequency: h.frequency,
+    timeOfDay: h.timeOfDay,
   });
 
   let bills: BriefingInput["bills"] = null;
@@ -49,6 +58,7 @@ export async function getBriefing(
   }
 
   let wins: BriefingInput["wins"] = null;
+  let insight: string | null = null;
   if (kind === "weekly" && planner) {
     const w = await getWins(db, userId, { now, sections: ctx.sections, extras: ctx.extras });
     wins = {
@@ -59,6 +69,7 @@ export async function getBriefing(
       noSpendDays: w.noSpendDays?.length ?? 0,
       dailyPercent: w.dailyPercent,
     };
+    insight = w.insight;
   }
 
   const input: BriefingInput = {
@@ -73,6 +84,9 @@ export async function getBriefing(
     wins,
     leftCents: kind === "weekly" ? leftCents : null,
     savedCents: kind === "weekly" && wantsOn && money ? await savedCents(db, userId) : null,
+    timeOfDay: ctx.extras.includes("time_of_day"),
+    energyAsk: kind === "evening" && energyOn && day !== null && day.energy === null,
+    insight,
   };
   if (kind === "morning") return morningMessage(input);
   if (kind === "evening") return eveningMessage(input);

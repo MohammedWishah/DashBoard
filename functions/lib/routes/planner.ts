@@ -2,6 +2,8 @@ import { Hono } from "hono";
 import { dateSchema, monthQuerySchema } from "../../../shared/money-schemas";
 import {
   dayQuerySchema,
+  energyPutSchema,
+  habitOrderSchema,
   dayTasksPutSchema,
   habitCreateSchema,
   habitUpdateSchema,
@@ -27,7 +29,7 @@ function pathDate(value: string) {
 }
 
 export const plannerRoutes = new Hono<AppEnv>()
-  .get("/day", validate("query", dayQuerySchema), async (c) => c.json(await planner.getDay(db(c), c.get("userId"), c.req.valid("query").date, new Date(), kind(c))))
+  .get("/day", validate("query", dayQuerySchema), async (c) => c.json(await planner.getDay(db(c), c.get("userId"), c.req.valid("query").date, new Date(), kind(c), c.var.extras.includes("energy"))))
   .put("/day/:date/tasks", validate("json", dayTasksPutSchema), async (c) =>
     c.json({ tasks: await planner.putDayTasks(db(c), c.get("userId"), pathDate(c.req.param("date")), c.req.valid("json").tasks) }),
   )
@@ -41,6 +43,13 @@ export const plannerRoutes = new Hono<AppEnv>()
   .post("/habits", validate("json", habitCreateSchema), async (c) =>
     c.json({ habit: await planner.createHabit(db(c), c.get("userId"), c.req.valid("json")) }, 201),
   )
+  .put("/habits/order", validate("json", habitOrderSchema), async (c) =>
+    c.json({ habits: await planner.reorderHabits(db(c), c.get("userId"), c.req.valid("json").ids) }),
+  )
+  .put("/energy/:date", validate("json", energyPutSchema), async (c) =>
+    c.json(await planner.setEnergy(db(c), c.get("userId"), pathDate(c.req.param("date")), c.req.valid("json").level)),
+  )
+  .delete("/energy/:date", async (c) => c.json(await planner.setEnergy(db(c), c.get("userId"), pathDate(c.req.param("date")), null)))
   .patch("/habits/:id", validate("json", habitUpdateSchema), async (c) =>
     c.json({ habit: await planner.updateHabit(db(c), c.get("userId"), c.req.param("id"), c.req.valid("json")) }),
   )

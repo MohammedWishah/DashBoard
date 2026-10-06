@@ -1,10 +1,11 @@
+import type { EnergyLevel } from "../../../shared/energy";
 import { berlinToday } from "../../../shared/money";
 import { periodFor, periodLabel } from "../../../shared/planner";
 import type { DayView } from "../../../shared/planner-schemas";
 import { normalizeName } from "../../../shared/rules";
 import type { Db } from "../db";
 import { ApiError } from "../errors";
-import { findHabitByName, getDay, putDayTasks, setCheck, updateTask } from "./planner";
+import { findHabitByName, getDay, putDayTasks, setCheck, setEnergy, updateTask } from "./planner";
 
 // Voice-agent side of the Planner. The agent sends names and plain text; this file
 // matches them and writes short replies that read well in a chat.
@@ -76,4 +77,11 @@ export async function agentTaskDone(db: Db, userId: string, input: { task: strin
   const task = await updateTask(db, userId, target.id, { done: true });
   const doneCount = day.tasks.filter((t) => t.done || t.id === task.id).length;
   return { task, speech: `Done: ${task.text}. ${doneCount} of ${day.tasks.length} done.` };
+}
+
+export async function agentEnergy(db: Db, userId: string, input: { level: EnergyLevel; date?: string }, now = new Date()) {
+  const today = berlinToday(now);
+  const day = input.date ?? today;
+  await setEnergy(db, userId, day, input.level, today);
+  return { speech: `Logged energy: ${input.level} for ${day === today ? "today" : day}.` };
 }

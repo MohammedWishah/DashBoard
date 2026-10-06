@@ -1,12 +1,14 @@
 import { and, asc, between, eq, isNull, min } from "drizzle-orm";
 import { dayTasks, expenses, habitChecks, habits, projects, shippedEvents } from "../../../db/schema";
 import type { Extra, Feature } from "../../../shared/features";
+import { energyInsight, insightText } from "../../../shared/energy";
 import { berlinToday } from "../../../shared/money";
 import { addDays, createdDay, isValidPeriod, mondayOf } from "../../../shared/planner";
 import { noSpendDays, weekDays, weekHabitPercent, winsTotal, type WinsView } from "../../../shared/wins";
 import type { Db } from "../db";
 import { ApiError } from "../errors";
 import { skippedBetween } from "./money/wants";
+import { listEnergy } from "./planner";
 
 /** Berlin day of an ISO timestamp. */
 const dayOf = (iso: string) => berlinToday(new Date(iso));
@@ -39,8 +41,11 @@ export async function getWins(
   const byHabit = new Map<string, Set<string>>();
   for (const c of checkRows) byHabit.set(c.habitId, (byHabit.get(c.habitId) ?? new Set()).add(c.period));
   const counted = habitRows.filter((h) => h.frequency !== "monthly");
+  // Days the habit could have been done this week (up to today, since it existed); weekly habits: 1.
+  const possible = (h: (typeof counted)[number]) =>
+    h.frequency === "weekly" ? 1 : days.filter((d) => d <= today && d >= createdDay(h.createdAt)).length;
   const habitWins = counted
-    .map((h) => ({ name: h.name, frequency: h.frequency, count: byHabit.get(h.id)?.size ?? 0 }))
+    .map((h) => ({ name: h.name, frequency: h.frequency, count: byHabit.get(h.id)?.size ?? 0, possible: possible(h) }))
     .filter((h) => h.count > 0)
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
   const dailyPercent = weekHabitPercent(
@@ -84,6 +89,29 @@ export async function getWins(
       .filter((w) => w.day >= first && w.day <= last);
   }
 
-  const view = { week: monday, days, today, tasksDone: tasks, habits: habitWins, dailyPercent, shipped, noSpendDays: noSpend, skipped };
+  let insight: string | null = null;
+  if (opts.extras.includes("energy")) {
+    const from = addDays(today, -59);
+    const dailyHabits = habitRows.filter((h) => h.frequency === "daily");
+    const [energy, recentChecks] = await Promise.all([
+      listEnergy(db, userId, from, today),
+      dailyHabits.length === 0
+        ? Promise.resolve([])
+        : db
+            .select({ habitId: habitChecks.habitId, period: habitChecks.period })
+            .from(habitChecks)
+            .where(and(eq(habitChecks.userId, userId), between(habitChecks.period, from, today))),
+    ]);
+    const checksOf = new Map<string, Set<string>>();
+    for (const c of recentChecks) checksOf.set(c.habitId, (checksOf.get(c.habitId) ?? new Set()).add(c.period));
+    const found = energyInsight(
+      energy,
+      dailyHabits.map((h) => ({ name: h.name, createdOn: createdDay(h.createdAt), checks: checksOf.get(h.id) ?? new Set() })),
+      today,
+    );
+    insight = found ? insightText(found) : null;
+  }
+
+  const view = { week: monday, days, today, tasksDone: tasks, habits: habitWins, dailyPercent, shipped, noSpendDays: noSpend, skipped, insight };
   return { ...view, total: winsTotal(view) };
 }

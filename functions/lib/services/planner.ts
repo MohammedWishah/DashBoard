@@ -1,5 +1,6 @@
-import { and, asc, count, eq, inArray } from "drizzle-orm";
-import { dayTasks, habitChecks, habits } from "../../../db/schema";
+import { and, asc, between, count, eq, inArray } from "drizzle-orm";
+import { dayTasks, energyCheckins, habitChecks, habits } from "../../../db/schema";
+import type { EnergyLevel } from "../../../shared/energy";
 import { berlinMonth, berlinToday } from "../../../shared/money";
 import {
   HABIT_LIMITS,
@@ -83,6 +84,9 @@ export async function createHabit(db: Db, userId: string, input: HabitCreate): P
     sortOrder: all.reduce((m, h) => Math.max(m, h.sortOrder + 1), 0),
     archived: false,
     createdAt: nowIso(),
+    tiny: input.tiny ?? null,
+    timeOfDay: input.timeOfDay ?? "any",
+    archivedAt: null,
   };
   await db.insert(habits).values(row);
   return strip(row);
@@ -93,12 +97,63 @@ export async function updateHabit(db: Db, userId: string, id: string, patch: Hab
   if (patch.name !== undefined) await assertNameFree(db, userId, patch.name, id);
   if (patch.archived === false && habit.archived) await assertUnderLimit(db, userId, habit.frequency);
   if (Object.keys(patch).length === 0) return habit;
+  // Remember when it was archived, so past chart days don't change.
+  const stamped = {
+    ...patch,
+    ...(patch.archived === true && !habit.archived && { archivedAt: nowIso() }),
+    ...(patch.archived === false && { archivedAt: null }),
+  };
   await db
     .update(habits)
-    .set(patch)
+    .set(stamped)
     .where(and(eq(habits.id, id), eq(habits.userId, userId)));
   return getHabit(db, userId, id);
 }
+
+/** Sets sortOrder by position in `ids`. Only the caller's habits; any other id is a 404. */
+export async function reorderHabits(db: Db, userId: string, ids: string[]): Promise<HabitRow[]> {
+  const mine = new Set((await listHabits(db, userId)).map((h) => h.id));
+  if (ids.some((id) => !mine.has(id))) throw notFound("Habit");
+  const [first, ...rest] = ids.map((id, i) =>
+    db
+      .update(habits)
+      .set({ sortOrder: i })
+      .where(and(eq(habits.id, id), eq(habits.userId, userId))),
+  );
+  await db.batch([first, ...rest]);
+  return listHabits(db, userId);
+}
+
+// ---- Energy -------------------------------------------------------------------
+
+export async function getEnergy(db: Db, userId: string, day: string): Promise<EnergyLevel | null> {
+  const row = await db
+    .select({ level: energyCheckins.level })
+    .from(energyCheckins)
+    .where(and(eq(energyCheckins.userId, userId), eq(energyCheckins.day, day)))
+    .get();
+  return row?.level ?? null;
+}
+
+/** One level a day: logging again replaces it; null clears it. */
+export async function setEnergy(db: Db, userId: string, day: string, level: EnergyLevel | null, today = berlinToday()) {
+  if (day > today) throw new ApiError(400, "future_day", "You can only log energy for today or earlier");
+  if (level === null) {
+    await db.delete(energyCheckins).where(and(eq(energyCheckins.userId, userId), eq(energyCheckins.day, day)));
+  } else {
+    await db
+      .insert(energyCheckins)
+      .values({ userId, day, level, updatedAt: nowIso() })
+      .onConflictDoUpdate({ target: [energyCheckins.userId, energyCheckins.day], set: { level, updatedAt: nowIso() } });
+  }
+  return { day, level };
+}
+
+export const listEnergy = (db: Db, userId: string, from: string, to: string) =>
+  db
+    .select({ day: energyCheckins.day, level: energyCheckins.level })
+    .from(energyCheckins)
+    .where(and(eq(energyCheckins.userId, userId), between(energyCheckins.day, from, to)));
 
 export async function deleteHabit(db: Db, userId: string, id: string) {
   await getHabit(db, userId, id);
@@ -170,7 +225,7 @@ async function listTasks(db: Db, userId: string, day: string): Promise<DayTaskRo
   return rows.map(strip);
 }
 
-export async function getDay(db: Db, userId: string, date?: string, now = new Date(), kind = false): Promise<DayView> {
+export async function getDay(db: Db, userId: string, date?: string, now = new Date(), kind = false, energy = false): Promise<DayView> {
   const today = berlinToday(now);
   const day = date ?? today;
   const active = (await listHabits(db, userId)).filter((h) => !h.archived);
@@ -188,6 +243,7 @@ export async function getDay(db: Db, userId: string, date?: string, now = new Da
       weekly: active.filter((h) => h.frequency === "weekly").map(view),
       monthly: active.filter((h) => h.frequency === "monthly").map(view),
     },
+    energy: energy ? await getEnergy(db, userId, day) : null,
   };
 }
 
@@ -214,9 +270,14 @@ export async function getMonth(db: Db, userId: string, month?: string, now = new
   const m = month ?? berlinMonth(now);
   const days = daysOfMonth(m);
   const mondays = mondaysInMonth(m);
-  const active = (await listHabits(db, userId)).filter((h) => !h.archived);
-  const checks = await checksByHabit(db, userId, active.map((h) => h.id));
+  const all = await listHabits(db, userId);
+  const active = all.filter((h) => !h.archived);
+  // Archived daily habits still count on chart days before they were archived.
+  const dailyAll = all.filter((h) => h.frequency === "daily");
+  const checks = await checksByHabit(db, userId, [...new Set([...active, ...dailyAll].map((h) => h.id))]);
   const created = (h: HabitRow) => createdDay(h.createdAt);
+  // Archived before archive dates existed: treat it as gone from the start, as before.
+  const archivedOn = (h: HabitRow) => (!h.archived ? null : h.archivedAt ? createdDay(h.archivedAt) : created(h));
 
   const daily = active
     .filter((h) => h.frequency === "daily")
@@ -248,7 +309,12 @@ export async function getMonth(db: Db, userId: string, month?: string, now = new
     days,
     mondays,
     daily,
-    dayPercents: dayPercents(daily.map((r) => ({ id: r.habit.id, createdOn: created(r.habit) })), checks, m, today),
+    dayPercents: dayPercents(
+      dailyAll.map((h) => ({ id: h.id, createdOn: created(h), archivedOn: archivedOn(h) })),
+      checks,
+      m,
+      today,
+    ),
     weekly,
     monthly,
     top: topHabits([

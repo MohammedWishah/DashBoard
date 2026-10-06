@@ -28,6 +28,7 @@ for (const path of ["/money/*", "/agent/money/*"]) app.use(path, requireFeature(
 for (const path of ["/planner/*", "/agent/planner/*"]) app.use(path, requireFeature("planner"));
 for (const path of ["/money/wants", "/money/wants/*", "/agent/money/wants", "/agent/money/wants/*"]) app.use(path, requireExtra("wants"));
 app.use("/planner/wins", requireExtra("wins"));
+for (const path of ["/planner/energy/*", "/agent/planner/energy"]) app.use(path, requireExtra("energy"));
 app.use("/admin/*", requireAdmin);
 
 app.route("/agent", agentRoutes);

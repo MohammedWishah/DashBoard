@@ -1,4 +1,4 @@
-import type { DayTaskRow, DayView, HabitCreate, HabitRow, HabitUpdate, MonthView } from "@shared/planner-schemas";
+import type { DayTaskRow, DayView, HabitCreateInput, HabitRow, HabitUpdate, MonthView } from "@shared/planner-schemas";
 import type { WinsView } from "@shared/wins";
 import { request } from "@/lib/api";
 
@@ -9,7 +9,7 @@ export const plannerApi = {
   month: (month: string) => request<MonthView>(`/planner/month?month=${month}`),
   wins: (week?: string) => request<WinsView>(`/planner/wins${week ? `?week=${week}` : ""}`),
   habits: () => request<{ habits: HabitRow[] }>("/planner/habits").then((r) => r.habits),
-  createHabit: (input: HabitCreate) =>
+  createHabit: (input: HabitCreateInput) =>
     request<{ habit: HabitRow }>("/planner/habits", { method: "POST", body: json(input) }).then((r) => r.habit),
   updateHabit: (id: string, patch: HabitUpdate) =>
     request<{ habit: HabitRow }>(`/planner/habits/${id}`, { method: "PATCH", body: json(patch) }).then((r) => r.habit),

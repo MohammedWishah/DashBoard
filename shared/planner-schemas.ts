@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { dateSchema } from "./money-schemas";
-import { FREQUENCIES, MAX_DAY_TASKS, type Frequency } from "./planner";
+import { ENERGY_LEVELS, type EnergyLevel } from "./energy";
+import { FREQUENCIES, MAX_DAY_TASKS, TIMES_OF_DAY, type Frequency, type TimeOfDay } from "./planner";
 
 export const frequencySchema = z.enum(FREQUENCIES);
 const habitName = z.string().trim().min(1, "Name is required").max(80);
@@ -8,11 +9,22 @@ const taskText = z.string().trim().min(1, "Write something").max(200);
 
 // ---- Inputs ---------------------------------------------------------------
 
-export const habitCreateSchema = z.object({ name: habitName, frequency: frequencySchema });
+/** "" clears it. */
+const tiny = z
+  .string()
+  .trim()
+  .max(80)
+  .nullable()
+  .optional()
+  .transform((v) => (v === "" ? null : v));
+export const habitCreateSchema = z.object({ name: habitName, frequency: frequencySchema, tiny, timeOfDay: z.enum(TIMES_OF_DAY).default("any") });
 export const habitUpdateSchema = z
-  .object({ name: habitName, sortOrder: z.number().int().min(0), archived: z.boolean() })
+  .object({ name: habitName, sortOrder: z.number().int().min(0), archived: z.boolean(), tiny, timeOfDay: z.enum(TIMES_OF_DAY) })
   .partial()
   .strict();
+export const habitOrderSchema = z.object({ ids: z.array(z.string().min(1)).min(1).max(110) });
+export const energyPutSchema = z.object({ level: z.enum(ENERGY_LEVELS) });
+export const agentEnergySchema = z.object({ level: z.enum(ENERGY_LEVELS), date: dateSchema.optional() });
 export const dayTasksPutSchema = z.object({
   tasks: z.array(z.object({ text: taskText, done: z.boolean().default(false) })).max(MAX_DAY_TASKS, `At most ${MAX_DAY_TASKS} tasks`),
 });
@@ -28,6 +40,7 @@ export const agentTasksSchema = z.object({
 export const agentTaskDoneSchema = z.object({ task: taskText, date: dateSchema.optional() });
 
 export type HabitCreate = z.infer<typeof habitCreateSchema>;
+export type HabitCreateInput = z.input<typeof habitCreateSchema>;
 export type HabitUpdate = z.infer<typeof habitUpdateSchema>;
 export type DayTasksPut = z.input<typeof dayTasksPutSchema>;
 export type TaskUpdate = z.infer<typeof taskUpdateSchema>;
@@ -41,6 +54,9 @@ export type HabitRow = {
   sortOrder: number;
   archived: boolean;
   createdAt: string;
+  tiny: string | null;
+  timeOfDay: TimeOfDay;
+  archivedAt: string | null;
 };
 export type DayTaskRow = { id: string; day: string; position: number; text: string; done: boolean; createdAt: string };
 
@@ -50,6 +66,8 @@ export type DayView = {
   today: string;
   tasks: DayTaskRow[];
   habits: { daily: DayHabit[]; weekly: DayHabit[]; monthly: DayHabit[] };
+  /** null when the Energy check-in extra is off or nothing is logged */
+  energy: EnergyLevel | null;
 };
 
 export type MonthDailyRow = { habit: HabitRow; checks: string[]; percent: number | null; streak: number; total: number | null; atRisk: boolean };
@@ -87,6 +105,10 @@ export const plannerExportSchema = z.object({
       sortOrder: z.number().int().min(0),
       archived: z.boolean(),
       createdAt: isoDateTime,
+      // Optional so files exported before these existed still import.
+      tiny: z.string().max(80).nullable().optional(),
+      timeOfDay: z.enum(TIMES_OF_DAY).optional(),
+      archivedAt: isoDateTime.nullable().optional(),
     }),
   ),
   habitChecks: z.array(z.object({ habitId: z.string().min(1), period: dateSchema, createdAt: isoDateTime })),
@@ -100,5 +122,6 @@ export const plannerExportSchema = z.object({
       createdAt: isoDateTime,
     }),
   ),
+  energy: z.array(z.object({ day: dateSchema, level: z.enum(ENERGY_LEVELS), updatedAt: isoDateTime })).optional(),
 });
 export type PlannerExport = z.infer<typeof plannerExportSchema>;

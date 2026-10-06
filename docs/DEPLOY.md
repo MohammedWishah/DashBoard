@@ -114,4 +114,4 @@ If you installed the older `life-board-money` folder, delete it from `~/.hermes/
 4. Times follow the clock of the machine Hermes runs on. Check with `date`; if it isn't Berlin time, shift the hours.
 5. Test now: `hermes cron run life-board-morning` (or ask Hermes "run my life-board-morning job now").
 
-The scripts read `LIFE_BOARD_URL` and `LIFE_BOARD_TOKEN` from `~/.hermes/.env` themselves, so no Hermes config change is needed. Evening stays silent when everything is done.
+The scripts read `LIFE_BOARD_URL` and `LIFE_BOARD_TOKEN` from `~/.hermes/.env` themselves, so no Hermes config change is needed. Evening stays silent when everything is done. With the Energy check-in extra on, the evening message also asks for your energy until you log it.

@@ -8,6 +8,7 @@ Install: copy into ~/.hermes/scripts/ and run
 import json
 import os
 import pathlib
+import urllib.error
 import urllib.request
 
 KIND = "evening"
@@ -19,9 +20,16 @@ def setting(name):
     env = pathlib.Path(os.environ.get("HERMES_HOME", pathlib.Path.home() / ".hermes")) / ".env"
     try:
         for line in env.read_text(encoding="utf-8").splitlines():
-            key, _, value = line.partition("=")
-            if key.strip() == name:
-                return value.strip().strip('"').strip("'")
+            line = line.strip()
+            if line.startswith("export "):
+                line = line[len("export "):]
+            key, sep, value = line.partition("=")
+            if not sep or key.strip() != name:
+                continue
+            value = value.strip()
+            if value[:1] in ("'", '"'):
+                return value[1:].split(value[0], 1)[0]
+            return value.split(" #", 1)[0].strip()
     except OSError:
         pass
     return ""
@@ -36,7 +44,13 @@ def main():
     try:
         with urllib.request.urlopen(req, timeout=20) as res:
             message = json.loads(res.read().decode("utf-8")).get("message", "")
-    except Exception as e:  # noqa: BLE001 - one line to Telegram beats a silent failure
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 403):
+            print(f"Life Board: token rejected ({e.code}). Create a new one in Voice assistant and update ~/.hermes/.env")
+        else:
+            print(f"Life Board error {e.code}")
+        return
+    except Exception as e:  # noqa: BLE001
         print(f"Life Board unreachable: {e}")
         return
     if message:

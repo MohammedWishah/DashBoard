@@ -9,6 +9,7 @@
   life_board.py top3 "Call the bank" "Finish report" [--date ...]
   life_board.py done --task "Call the bank"              (or --task 2)
   life_board.py brief morning|evening|weekly
+  life_board.py energy low|ok|high [--date 2026-10-05]
   life_board.py want --name AirPods --amount 200
   life_board.py want-skip --name AirPods
   life_board.py want-buy --name AirPods --category Fun [--amount 189]
@@ -73,6 +74,9 @@ def main():
     undo = sub.add_parser("undo")
     undo.add_argument("id")
     sub.add_parser("left")
+    energy = sub.add_parser("energy")
+    energy.add_argument("level", choices=["low", "ok", "high"])
+    energy.add_argument("--date", help="YYYY-MM-DD, default today")
     sub.add_parser("plan")
     for name in ("check", "uncheck"):
         c = sub.add_parser(name)
@@ -111,6 +115,8 @@ def main():
         call("POST", "/money/expenses", body)
     elif a.cmd == "undo":
         call("DELETE", f"/money/expenses/{urllib.parse.quote(a.id, safe='')}")
+    elif a.cmd == "energy":
+        call("POST", "/planner/energy", dated({"level": a.level}))
     elif a.cmd == "left":
         call("GET", "/money/left")
     elif a.cmd == "plan":

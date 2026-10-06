@@ -1,6 +1,8 @@
 // Pure money rules shared by the API and the UI. No zod, no I/O.
 // Dates are local Europe/Berlin calendar dates as "YYYY-MM-DD", months as "YYYY-MM".
 
+import { normalizeName } from "./rules";
+
 export const MONEY_TIME_ZONE = "Europe/Berlin";
 export const MAX_AMOUNT_CENTS = 100_000_000; // €1,000,000
 export const WARN_RATIO = 0.8;
@@ -153,6 +155,24 @@ const euroFormat = new Intl.NumberFormat("en-IE", { style: "currency", currency:
 
 export function formatEuro(cents: number): string {
   return euroFormat.format(cents / 100);
+}
+
+/** Largest single expense an agent may log: €100,000. */
+export const MAX_AGENT_AMOUNT_CENTS = 10_000_000;
+export const OTHER_CATEGORY_NAME = "Other";
+
+/** Euros from an agent (e.g. 12.4) to cents. Null when not positive, over the max, or finer than a cent. */
+export function eurosToCents(euros: number): number | null {
+  if (!Number.isFinite(euros) || euros <= 0) return null;
+  const cents = Math.round(euros * 100);
+  if (Math.abs(cents - euros * 100) > 1e-6) return null;
+  return cents > MAX_AGENT_AMOUNT_CENTS ? null : cents;
+}
+
+/** First category (in the given order) whose name matches, ignoring case and extra spaces. */
+export function findCategoryByName<T extends { name: string }>(cats: T[], name: string): T | undefined {
+  const key = normalizeName(name);
+  return cats.find((c) => normalizeName(c.name) === key);
 }
 
 /** Whole euros for speech: 41250 -> "412 euros". */

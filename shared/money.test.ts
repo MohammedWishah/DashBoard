@@ -6,6 +6,8 @@ import {
   berlinToday,
   categoryLeft,
   dueDateFor,
+  eurosToCents,
+  findCategoryByName,
   formatEuro,
   monthBounds,
   monthTotals,
@@ -154,5 +156,40 @@ describe("paceSeries", () => {
   it("leaves the budget line empty without limits and fills past months fully", () => {
     const series = paceSeries({ month: "2026-01", today: "2026-02-10", dailyCents: {}, budgetCents: null });
     expect(series[30]).toEqual({ day: 31, spentCents: 0, budgetCents: null });
+  });
+});
+
+describe("eurosToCents", () => {
+  it("converts euros with up to 2 decimals exactly", () => {
+    expect(eurosToCents(50)).toBe(5000);
+    expect(eurosToCents(12.4)).toBe(1240);
+    expect(eurosToCents(19.99)).toBe(1999);
+    expect(eurosToCents(0.1 + 0.2)).toBe(30);
+    expect(eurosToCents(0.01)).toBe(1);
+    expect(eurosToCents(100000)).toBe(10_000_000);
+  });
+  it("rejects zero, negatives, over the max and sub-cent amounts", () => {
+    expect(eurosToCents(0)).toBeNull();
+    expect(eurosToCents(-5)).toBeNull();
+    expect(eurosToCents(100000.01)).toBeNull();
+    expect(eurosToCents(12.345)).toBeNull();
+    expect(eurosToCents(Number.NaN)).toBeNull();
+    expect(eurosToCents(Number.POSITIVE_INFINITY)).toBeNull();
+  });
+});
+
+describe("findCategoryByName", () => {
+  const cats = [
+    { id: "a", name: "Food" },
+    { id: "b", name: "Eating  Out" },
+    { id: "c", name: "food" },
+  ];
+  it("ignores case and extra spaces, first match wins", () => {
+    expect(findCategoryByName(cats, "FOOD")?.id).toBe("a");
+    expect(findCategoryByName(cats, "  eating out ")?.id).toBe("b");
+  });
+  it("returns undefined when nothing matches", () => {
+    expect(findCategoryByName(cats, "Gifts")).toBeUndefined();
+    expect(findCategoryByName([], "Food")).toBeUndefined();
   });
 });

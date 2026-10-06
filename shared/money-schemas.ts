@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MAX_AMOUNT_CENTS, type BarState, type PacePoint } from "./money";
+import { MAX_AMOUNT_CENTS, eurosToCents, type BarState, type PacePoint } from "./money";
 
 const isRealDate = (s: string) => {
   const d = new Date(`${s}T00:00:00Z`);
@@ -32,6 +32,16 @@ export const categoryUpdateSchema = z
 
 export const expenseCreateSchema = z.object({ categoryId: id, amountCents: amount, spentOn: dateSchema, note });
 export const expenseUpdateSchema = expenseCreateSchema.partial().strict();
+
+/** Voice agents speak euros, not cents: { category: "Food", amount: 12.4 }. */
+export const agentExpenseCreateSchema = z.object({
+  category: z.string().trim().min(1, "Category is required").max(80),
+  amount: z
+    .number()
+    .refine((n) => eurosToCents(n) !== null, "Amount must be euros from 0.01 to 100000, with at most 2 decimals"),
+  spentOn: dateSchema.optional(),
+  note,
+});
 
 export const billCreateSchema = z.object({
   name,
@@ -74,6 +84,7 @@ export const paymentCreateSchema = z.object({ amountCents: amount, paidOn: dateS
 export type CategoryCreate = z.infer<typeof categoryCreateSchema>;
 export type CategoryUpdate = z.infer<typeof categoryUpdateSchema>;
 export type ExpenseCreate = z.infer<typeof expenseCreateSchema>;
+export type AgentExpenseCreate = z.infer<typeof agentExpenseCreateSchema>;
 export type ExpenseUpdate = z.infer<typeof expenseUpdateSchema>;
 export type BillCreate = z.infer<typeof billCreateSchema>;
 export type BillUpdate = z.infer<typeof billUpdateSchema>;

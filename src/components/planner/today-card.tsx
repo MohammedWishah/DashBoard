@@ -39,7 +39,8 @@ export function TodayCard({ date, today, onDate }: { date: string; today: string
           </Button>
         </div>
       </header>
-      {showEnergy && d && <EnergyChips date={d.date} level={d.energy} />}
+      {/* The day on screen, never the one still loading: energy must land on the date shown. */}
+      {showEnergy && d && <EnergyChips date={date} level={day.isPlaceholderData ? null : d.energy} disabled={day.isPlaceholderData} />}
       {!d ? (
         <Skeleton className="h-40 w-full" />
       ) : (

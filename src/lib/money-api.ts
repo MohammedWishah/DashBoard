@@ -19,6 +19,9 @@ import type {
   MoneyCharts,
   MoneyOverview,
   PaymentCreate,
+  WantCreate,
+  WantRow,
+  WantsView,
 } from "@shared/money-schemas";
 import { request } from "@/lib/api";
 
@@ -67,4 +70,12 @@ export const moneyApi = {
   archiveDebt: (id: string) => request(`/money/debts/${id}`, { method: "PATCH", body: json({ archived: true }) }),
   addPayment: (debtId: string, input: PaymentCreate) =>
     request(`/money/debts/${debtId}/payments`, { method: "POST", body: json(input) }),
+
+  wants: () => request<WantsView>("/money/wants"),
+  createWant: (input: WantCreate) =>
+    request<{ want: WantRow }>("/money/wants", { method: "POST", body: json(input) }).then((r) => r.want),
+  buyWant: (id: string, input: { categoryId: string }) =>
+    request<{ want: WantRow; expenseId: string }>(`/money/wants/${id}/buy`, { method: "POST", body: json(input) }),
+  skipWant: (id: string) => request<{ want: WantRow }>(`/money/wants/${id}/skip`, { method: "POST" }),
+  deleteWant: (id: string) => request<{ ok: true }>(`/money/wants/${id}`, { method: "DELETE" }),
 };

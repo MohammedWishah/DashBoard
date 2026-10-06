@@ -19,6 +19,7 @@ export const moneyKeys = {
   expenses: (month: string) => ["money", "expenses", month] as const,
   categories: ["money", "categories"] as const,
   bills: ["money", "bills"] as const,
+  wants: ["money", "wants"] as const,
 };
 
 export function useOverview(month: string, enabled = true) {
@@ -44,6 +45,10 @@ export function useMonthExpenses(month: string, enabled: boolean) {
 
 export function useCategories() {
   return useQuery({ queryKey: moneyKeys.categories, queryFn: moneyApi.categories });
+}
+
+export function useWants(enabled = true) {
+  return useQuery({ queryKey: moneyKeys.wants, queryFn: moneyApi.wants, enabled });
 }
 
 export function useBills() {

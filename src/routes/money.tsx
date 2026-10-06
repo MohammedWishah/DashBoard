@@ -5,11 +5,13 @@ import { useQuickAdd } from "@/components/app-shell";
 import { ChartSkeleton, DebtChart, MonthsChart, PaceChart, WhereChart } from "@/components/money/charts";
 import { ExpenseList } from "@/components/money/expense-list";
 import { GoalsAndDebts } from "@/components/money/goals-debts";
+import { WantList } from "@/components/money/want-list";
 import { ManageDialog, type ManageTab } from "@/components/money/manage-dialog";
 import { BillsList, CategoryRows, MonthHero, MonthHeroSkeleton, MonthSwitcher, panel } from "@/components/money/summary";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useHasExtra } from "@/hooks/me";
 import { useCharts, useOverview } from "@/hooks/money";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +22,7 @@ export default function MoneyPage() {
   const charts = useCharts(month);
   const quickAdd = useQuickAdd();
   const [manage, setManage] = useState<ManageTab | null>(null);
+  const showWants = useHasExtra("wants");
   const o = overview.data;
   // Hold the previous month at reduced opacity while the next one loads, instead of flashing skeletons.
   const switching = overview.isPlaceholderData;
@@ -99,6 +102,7 @@ export default function MoneyPage() {
                   />
                 </div>
                 <div className="grid content-start gap-4 lg:col-span-5">
+                  {showWants && <WantList />}
                   <GoalsAndDebts goals={o.goals} debts={o.debts} />
                   {charts.data && <DebtChart data={charts.data} />}
                 </div>

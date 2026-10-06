@@ -1,7 +1,9 @@
 import { Hono } from "hono";
+import { agentExpenseCreateSchema } from "../../../shared/money-schemas";
 import { shipProjectSchema, updateProjectSchema } from "../../../shared/schemas";
 import { getDb } from "../db";
 import type { AppEnv } from "../env";
+import { logAgentExpense, undoAgentExpense } from "../services/money/agent";
 import { getMoneyLeft } from "../services/money/overview";
 import { listProjects, resolveProjectRef, shipProject, updateProject } from "../services/projects";
 import { validate } from "../validate";
@@ -33,5 +35,13 @@ export const agentRoutes = new Hono<AppEnv>()
     const target = await resolveProjectRef(db, userId, c.req.param("ref"));
     return c.json(await shipProject(db, userId, target.id, c.req.valid("json").note), 201);
   })
-  // "How much is left this month?" Read-only; expenses are logged in the app.
-  .get("/money/left", async (c) => c.json(await getMoneyLeft(getDb(c.env.DB), c.get("userId"))));
+  // "How much is left this month?"
+  .get("/money/left", async (c) => c.json(await getMoneyLeft(getDb(c.env.DB), c.get("userId"))))
+  // "50 euro food". Category by name; Other is created on first use.
+  .post("/money/expenses", validate("json", agentExpenseCreateSchema), async (c) =>
+    c.json(await logAgentExpense(getDb(c.env.DB), c.get("userId"), c.req.valid("json")), 201),
+  )
+  // "Undo that", with the id from the POST reply.
+  .delete("/money/expenses/:id", async (c) =>
+    c.json(await undoAgentExpense(getDb(c.env.DB), c.get("userId"), c.req.param("id"))),
+  );

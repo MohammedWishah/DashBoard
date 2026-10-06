@@ -42,7 +42,7 @@ const isEmpty = (o: object) => Object.keys(o).length === 0;
 export const listCategories = (db: Db, userId: string) =>
   db.select().from(categories).where(eq(categories.userId, userId)).orderBy(categories.sortOrder, categories.name);
 
-async function getCategory(db: Db, userId: string, id: string) {
+export async function getCategory(db: Db, userId: string, id: string) {
   const row = await db
     .select()
     .from(categories)
@@ -107,7 +107,7 @@ export async function deleteCategory(db: Db, userId: string, id: string) {
 
 // ---- Expenses ---------------------------------------------------------------
 
-async function getExpense(db: Db, userId: string, id: string) {
+export async function getExpense(db: Db, userId: string, id: string) {
   const row = await db
     .select()
     .from(expenses)

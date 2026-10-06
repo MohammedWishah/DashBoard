@@ -43,6 +43,13 @@
       "when": 1791296207851,
       "tag": "0005_wants",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1791300932551,
+      "tag": "0006_habit_extras",
+      "breakpoints": true
     }
   ]
 }

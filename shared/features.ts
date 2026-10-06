@@ -24,7 +24,7 @@ export function effectiveFeatures(isAdmin: boolean, stored: readonly string[]): 
 }
 
 /** Small optional helpers inside sections. Off by default, switched on per person (admin too). */
-export const EXTRAS = ["home_today", "kind_streaks", "wins", "wants", "nudges"] as const;
+export const EXTRAS = ["home_today", "kind_streaks", "wins", "wants", "nudges", "tiny_habits", "time_of_day", "energy"] as const;
 export type Extra = (typeof EXTRAS)[number];
 
 export const EXTRA_LABELS: Record<Extra, string> = {
@@ -33,6 +33,9 @@ export const EXTRA_LABELS: Record<Extra, string> = {
   wins: "Wins",
   wants: "Want list",
   nudges: "Hermes nudges",
+  tiny_habits: "Tiny versions",
+  time_of_day: "Time of day",
+  energy: "Energy check-in",
 };
 
 /** The section an extra lives in. It only works while that section is on. */
@@ -42,6 +45,9 @@ export const EXTRA_REQUIRES: Record<Extra, Feature | null> = {
   wins: "planner",
   wants: "money",
   nudges: null,
+  tiny_habits: "planner",
+  time_of_day: "planner",
+  energy: "planner",
 };
 
 export const isExtra = (v: unknown): v is Extra => typeof v === "string" && (EXTRAS as readonly string[]).includes(v);

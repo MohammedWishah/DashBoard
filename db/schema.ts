@@ -89,7 +89,7 @@ export const categories = sqliteTable(
     archived: integer("archived", { mode: "boolean" }).notNull().default(false),
     createdAt: text("created_at").notNull(),
   },
-  (t) => [index("categories_user_idx").on(t.userId)],
+  (t) => [index("categories_user_idx").on(t.userId), uniqueIndex("categories_user_name_unique").on(t.userId, sql`lower(${t.name})`)],
 );
 
 export const recurringBills = sqliteTable(
@@ -237,6 +237,9 @@ export const habits = sqliteTable(
     frequency: text("frequency", { enum: ["daily", "weekly", "monthly"] }).notNull(),
     sortOrder: integer("sort_order").notNull().default(0),
     archived: integer("archived", { mode: "boolean" }).notNull().default(false),
+    tiny: text("tiny"),
+    timeOfDay: text("time_of_day", { enum: ["morning", "afternoon", "evening", "any"] }).notNull().default("any"),
+    archivedAt: text("archived_at"),
     createdAt: text("created_at").notNull(),
   },
   (t) => [index("habits_user_idx").on(t.userId)],
@@ -267,4 +270,15 @@ export const dayTasks = sqliteTable(
     createdAt: text("created_at").notNull(),
   },
   (t) => [uniqueIndex("day_tasks_user_day_position_unique").on(t.userId, t.day, t.position), index("day_tasks_user_idx").on(t.userId)],
+);
+
+export const energyCheckins = sqliteTable(
+  "energy_checkins",
+  {
+    userId: owner(),
+    day: text("day").notNull(),
+    level: text("level", { enum: ["low", "ok", "high"] }).notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.day] })],
 );

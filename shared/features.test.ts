@@ -24,3 +24,10 @@ describe("effectiveFeatures ignores extras", () => {
     expect(effectiveFeatures(false, ["money", "wants", "nudges"])).toEqual(["money"]);
   });
 });
+
+describe("habit extras", () => {
+  it("need Planner", () => {
+    expect(effectiveExtras(["tiny_habits", "time_of_day", "energy"], ["planner"])).toEqual(["tiny_habits", "time_of_day", "energy"]);
+    expect(effectiveExtras(["tiny_habits", "time_of_day", "energy"], ["money"])).toEqual([]);
+  });
+});

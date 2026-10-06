@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { House, Kanban, Plus, UserCircle, UsersThree, Wallet, type Icon } from "@phosphor-icons/react";
+import { CalendarCheck, House, Kanban, Plus, UserCircle, UsersThree, Wallet, type Icon } from "@phosphor-icons/react";
 import type { Feature } from "@shared/features";
 import { AccountDialog } from "@/components/account-dialog";
 import { useAuth } from "@/components/auth/auth-gate";
@@ -14,6 +14,7 @@ type NavItem = { href: string; label: string; icon: Icon; feature?: Feature; adm
 const NAV: NavItem[] = [
   { href: "/", label: "Home", icon: House },
   { href: "/money", label: "Money", icon: Wallet, feature: "money" },
+  { href: "/planner", label: "Planner", icon: CalendarCheck, feature: "planner" },
   { href: "/projects", label: "Projects", icon: Kanban, feature: "projects" },
   { href: "/people", label: "People", icon: UsersThree, adminOnly: true },
 ];

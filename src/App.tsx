@@ -9,6 +9,7 @@ import ProjectsPage from "@/routes/projects";
 
 // Money pulls in the chart library, so it loads on first visit instead of up front.
 const MoneyPage = lazy(() => import("@/routes/money"));
+const PlannerPage = lazy(() => import("@/routes/planner"));
 const PeoplePage = lazy(() => import("@/routes/people"));
 
 /** Renders a section only for people who have it. The API enforces the same rule. */
@@ -34,6 +35,11 @@ export default function App() {
         <Route path="/money">
           <Gate feature="money">
             <MoneyPage />
+          </Gate>
+        </Route>
+        <Route path="/planner">
+          <Gate feature="planner">
+            <PlannerPage />
           </Gate>
         </Route>
         <Route path="/projects">

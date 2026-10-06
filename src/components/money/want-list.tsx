@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { toast } from "sonner";
 import { LinkSimple, Plus } from "@phosphor-icons/react";
 import { formatDistanceToNowStrict, parseISO } from "date-fns";
 import { formatEuro, parseEuroToCents, waitHours } from "@shared/money";
@@ -27,9 +28,30 @@ export function WantList() {
   const now = useNow();
   const [adding, setAdding] = useState(false);
   const [buying, setBuying] = useState<WantRow | null>(null);
-  const skip = useMoneyAction((id: string) => moneyApi.skipWant(id), "Skipped. Saved by waiting.");
+  const skip = useMoneyAction((id: string) => moneyApi.skipWant(id));
   const remove = useMoneyAction((id: string) => moneyApi.deleteWant(id));
+  // Skip and remove wait 5 seconds before reaching the server, so Undo really undoes.
+  const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
+  function later(item: WantRow, action: "skip" | "remove") {
+    setHidden((s) => new Set(s).add(item.id));
+    const timer = setTimeout(() => (action === "skip" ? skip.mutate(item.id) : remove.mutate(item.id)), 5000);
+    toast(action === "skip" ? `Skipped ${item.name}. Saved ${formatEuro(item.priceCents)} by waiting.` : `Removed ${item.name}`, {
+      duration: 5000,
+      action: {
+        label: "Undo",
+        onClick: () => {
+          clearTimeout(timer);
+          setHidden((s) => {
+            const next = new Set(s);
+            next.delete(item.id);
+            return next;
+          });
+        },
+      },
+    });
+  }
   const w = wants.data;
+  const waiting = (w?.waiting ?? []).filter((item) => !hidden.has(item.id));
 
   return (
     <section className={cn(panel, "grid content-start gap-4 p-5")} aria-labelledby="wants-title">
@@ -46,11 +68,11 @@ export function WantList() {
         </Button>
       </header>
       {adding && <AddWant onDone={() => setAdding(false)} />}
-      {!w ? null : w.waiting.length === 0 ? (
+      {!w ? null : waiting.length === 0 ? (
         <p className="text-sm text-muted-foreground">Want something? Put it here first. Under €50 waits a day, up to €200 three days, more a week.</p>
       ) : (
         <ul className="grid gap-3">
-          {w.waiting.map((item) => {
+          {waiting.map((item) => {
             const ready = Date.parse(item.readyAt) <= now;
             return (
               <li key={item.id} className="grid gap-1.5">
@@ -70,13 +92,13 @@ export function WantList() {
                     {ready ? "Ready to decide" : `Ready in ${formatDistanceToNowStrict(parseISO(item.readyAt))}`}
                   </span>
                   <div className="flex gap-1">
-                    <Button variant="ghost" size="sm" onClick={() => skip.mutate(item.id)}>
+                    <Button variant="ghost" size="sm" onClick={() => later(item, "skip")} aria-label={`Skip ${item.name}`}>
                       Skip
                     </Button>
-                    <Button variant={ready ? "secondary" : "ghost"} size="sm" onClick={() => setBuying(item)}>
+                    <Button variant={ready ? "secondary" : "ghost"} size="sm" onClick={() => setBuying(item)} aria-label={`Buy ${item.name}`}>
                       Buy
                     </Button>
-                    <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => remove.mutate(item.id)} aria-label={`Remove ${item.name}`}>
+                    <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => later(item, "remove")} aria-label={`Remove ${item.name}`}>
                       ×
                     </Button>
                   </div>
@@ -131,17 +153,22 @@ function BuyDialog({ want, now, onClose }: { want: WantRow | null; now: number; 
   const active = (categories.data ?? []).filter((c) => !c.archived);
   const [categoryId, setCategoryId] = useState<string>("");
   const buy = useMoneyAction((v: { id: string; categoryId: string }) => moneyApi.buyWant(v.id, { categoryId: v.categoryId }), "Bought. Logged as an expense.");
+  const forWant = useRef<string | null>(null);
   useEffect(() => {
     if (!want) return;
-    // Same default as Quick add: the last category used, else Other.
+    // Same default as Quick add: the last category used, else Other. Runs again once categories
+    // load, but never overrides a choice already made for this want.
     let last: string | null = null;
     try {
       last = localStorage.getItem("quick-add:last-category");
     } catch {
       /* private mode */
     }
-    setCategoryId(active.find((c) => c.id === last)?.id ?? active.find((c) => c.name === "Other")?.id ?? active[0]?.id ?? "");
-  }, [want?.id]);
+    const fallback = active.find((c) => c.id === last)?.id ?? active.find((c) => c.name === "Other")?.id ?? active[0]?.id ?? "";
+    const keep = forWant.current === want.id;
+    setCategoryId((cur) => (keep && cur && active.some((c) => c.id === cur) ? cur : fallback));
+    forWant.current = want.id;
+  }, [want?.id, active.length]);
   const early = want ? Date.parse(want.readyAt) > now : false;
 
   return (

@@ -15,6 +15,8 @@ export default function PeoplePage() {
   const qc = useQueryClient();
   const people = useQuery({ queryKey: key, queryFn: () => request<{ users: Person[] }>("/admin/users").then((r) => r.users) });
   const save = useMutation({
+    // One at a time, so two quick toggles can't undo each other on the server.
+    scope: { id: "people-access" },
     mutationFn: ({ id, features, extras }: { id: string; features?: Feature[]; extras?: Extra[] }) =>
       request(`/admin/users/${id}`, { method: "PATCH", body: JSON.stringify({ features, extras }) }),
     onMutate: async ({ id, features, extras }) => {

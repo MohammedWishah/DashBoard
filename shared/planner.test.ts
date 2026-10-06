@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   addDays,
+  atRisk,
+  kindStreak,
   createdDay,
   dayPercents,
   daysOfMonth,
@@ -137,5 +139,50 @@ describe("topHabits", () => {
     ];
     expect(topHabits(rows).map((r) => r.name)).toEqual(["d", "c", "a", "b"]);
     expect(topHabits(rows, 2)).toHaveLength(2);
+  });
+});
+
+describe("forgiving streak", () => {
+  const set = (...d: string[]) => new Set(d);
+  it("skips a single missed day", () => {
+    // 3rd, 4th ticked; 5th missed; 6th ticked
+    expect(kindStreak("daily", set("2026-10-03", "2026-10-04", "2026-10-06"), "2026-10-06")).toBe(3);
+  });
+  it("ends at two misses in a row", () => {
+    expect(kindStreak("daily", set("2026-10-01", "2026-10-02", "2026-10-05", "2026-10-06"), "2026-10-06")).toBe(2);
+  });
+  it("keeps the streak when only yesterday is missed and today is open", () => {
+    expect(kindStreak("daily", set("2026-10-03", "2026-10-04"), "2026-10-06")).toBe(2);
+  });
+  it("is 0 after two missed days with today open", () => {
+    expect(kindStreak("daily", set("2026-10-01", "2026-10-02", "2026-10-03"), "2026-10-06")).toBe(0);
+  });
+  it("works in weeks", () => {
+    // weeks of Sep 14, Sep 21 ticked; Sep 28 missed; this week (Oct 5) ticked
+    expect(kindStreak("weekly", set("2026-09-14", "2026-09-21", "2026-10-05"), "2026-10-08")).toBe(3);
+  });
+  it("is 0 for monthly habits and empty sets", () => {
+    expect(kindStreak("monthly", set("2026-10-01"), "2026-10-06")).toBe(0);
+    expect(kindStreak("daily", set(), "2026-10-06")).toBe(0);
+  });
+});
+
+describe("atRisk", () => {
+  const set = (...d: string[]) => new Set(d);
+  it("is true when yesterday was missed, today is open and the day before was ticked", () => {
+    expect(atRisk("daily", set("2026-10-04"), "2026-10-06")).toBe(true);
+  });
+  it("is false once today is ticked", () => {
+    expect(atRisk("daily", set("2026-10-04", "2026-10-06"), "2026-10-06")).toBe(false);
+  });
+  it("is false when yesterday was ticked", () => {
+    expect(atRisk("daily", set("2026-10-05"), "2026-10-06")).toBe(false);
+  });
+  it("is false when the streak is already gone", () => {
+    expect(atRisk("daily", set("2026-10-01"), "2026-10-06")).toBe(false);
+  });
+  it("works for weeks and never for months", () => {
+    expect(atRisk("weekly", set("2026-09-21"), "2026-10-08")).toBe(true);
+    expect(atRisk("monthly", set("2026-08-01"), "2026-10-06")).toBe(false);
   });
 });

@@ -43,7 +43,7 @@ export type HabitRow = {
 };
 export type DayTaskRow = { id: string; day: string; position: number; text: string; done: boolean; createdAt: string };
 
-export type DayHabit = HabitRow & { checked: boolean; streak: number };
+export type DayHabit = HabitRow & { checked: boolean; streak: number; total: number | null; atRisk: boolean };
 export type DayView = {
   date: string;
   today: string;
@@ -51,9 +51,16 @@ export type DayView = {
   habits: { daily: DayHabit[]; weekly: DayHabit[]; monthly: DayHabit[] };
 };
 
-export type MonthDailyRow = { habit: HabitRow; checks: string[]; percent: number | null; streak: number };
-export type MonthWeeklyRow = { habit: HabitRow; weeks: { monday: string; checked: boolean }[]; percent: number | null; streak: number };
-export type MonthMonthlyRow = { habit: HabitRow; checked: boolean };
+export type MonthDailyRow = { habit: HabitRow; checks: string[]; percent: number | null; streak: number; total: number | null; atRisk: boolean };
+export type MonthWeeklyRow = {
+  habit: HabitRow;
+  weeks: { monday: string; checked: boolean }[];
+  percent: number | null;
+  streak: number;
+  total: number | null;
+  atRisk: boolean;
+};
+export type MonthMonthlyRow = { habit: HabitRow; checked: boolean; total: number | null };
 export type TopHabit = { id: string; name: string; frequency: "daily" | "weekly"; percent: number | null; streak: number };
 export type MonthView = {
   month: string;

@@ -56,6 +56,39 @@ export function streak(f: Frequency, checked: ReadonlySet<string>, today: string
   return n;
 }
 
+/**
+ * "Never miss twice": like `streak`, but a single missed period between ticks is skipped
+ * (it doesn't count and doesn't break). Two misses in a row end it.
+ */
+export function kindStreak(f: Frequency, checked: ReadonlySet<string>, today: string): number {
+  if (f === "monthly" || checked.size === 0) return 0;
+  const step = f === "daily" ? 1 : 7;
+  const earliest = [...checked].reduce((a, b) => (a < b ? a : b));
+  let p = periodFor(f, today);
+  if (!checked.has(p)) p = addDays(p, -step);
+  let n = 0;
+  let misses = 0;
+  while (p >= earliest) {
+    if (checked.has(p)) {
+      n++;
+      misses = 0;
+    } else if (++misses === 2) {
+      break;
+    }
+    p = addDays(p, -step);
+  }
+  return n;
+}
+
+/** The previous period was missed, the current one is still open, and the streak is still alive. */
+export function atRisk(f: Frequency, checked: ReadonlySet<string>, today: string): boolean {
+  if (f === "monthly") return false;
+  const step = f === "daily" ? 1 : 7;
+  const current = periodFor(f, today);
+  const previous = addDays(current, -step);
+  return !checked.has(current) && !checked.has(previous) && checked.has(addDays(previous, -step));
+}
+
 /** Share of the month's elapsed periods ticked, counting only periods since the habit existed. Null when none elapsed. */
 export function habitPercent(
   f: "daily" | "weekly",

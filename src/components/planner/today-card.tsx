@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { CaretLeft, CaretRight, Check, Fire } from "@phosphor-icons/react";
+import { CaretLeft, CaretRight, Check, Fire, WarningCircle } from "@phosphor-icons/react";
 import { format, parseISO } from "date-fns";
 import { MAX_DAY_TASKS, addDays, mondayOf } from "@shared/planner";
 import type { DayHabit, DayView } from "@shared/planner-schemas";
@@ -146,18 +146,30 @@ export function HabitChecklist({ title, habits, date }: { title?: string; habits
       {title && <p className="text-xs text-muted-foreground">{title}</p>}
       <ul className="grid gap-1.5">
         {habits.map((h) => (
-          <li key={h.id} className="flex items-center gap-2 text-sm">
-            <TickBox
-              checked={h.checked}
-              label={`${h.name}: ${h.checked ? "untick" : "tick"}`}
-              onChange={(checked) => toggle.mutate({ habitId: h.id, frequency: h.frequency, date, checked })}
-            />
-            <span className={cn("min-w-0 flex-1 truncate", h.checked && "text-muted-foreground")}>{h.name}</span>
-            {h.streak > 1 && (
-              <span className="flex items-center gap-0.5 text-xs tabular-nums text-muted-foreground" title={`${h.streak} in a row`}>
-                <Fire weight="fill" className="text-primary" />
-                {h.streak}
+          <li key={h.id} className="grid gap-0.5 text-sm">
+            <div className="flex items-center gap-2">
+              <TickBox
+                checked={h.checked}
+                label={`${h.name}: ${h.checked ? "untick" : "tick"}`}
+                onChange={(checked) => toggle.mutate({ habitId: h.id, frequency: h.frequency, date, checked })}
+              />
+              <span className={cn("min-w-0 flex-1 truncate", h.checked && "text-muted-foreground")}>
+                {h.name}
+                {h.total !== null && <span className="ml-1.5 text-xs text-muted-foreground">· {h.total} done</span>}
               </span>
+              {h.streak > 1 && (
+                <span className="flex items-center gap-0.5 text-xs tabular-nums text-muted-foreground" title={`${h.streak} in a row`}>
+                  <Fire weight="fill" className="text-primary" />
+                  {h.streak}
+                </span>
+              )}
+            </div>
+            {h.atRisk && (
+              <p className="flex items-center gap-1.5 pl-7 text-xs text-status-warning">
+                <WarningCircle weight="fill" aria-hidden />
+                Missed {h.frequency === "weekly" ? "last week" : "yesterday"} · tick {h.frequency === "weekly" ? "this week" : "today"} to keep{" "}
+                {h.streak}
+              </p>
             )}
           </li>
         ))}

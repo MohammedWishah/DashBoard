@@ -30,12 +30,19 @@ export function planSpeech(day: DayView): string {
   return parts.join(" ");
 }
 
-export async function agentToday(db: Db, userId: string, now = new Date()) {
-  const day = await getDay(db, userId, undefined, now);
+export async function agentToday(db: Db, userId: string, kind = false, now = new Date()) {
+  const day = await getDay(db, userId, undefined, now, kind);
   return { ...day, speech: planSpeech(day) };
 }
 
-export async function agentCheck(db: Db, userId: string, input: { habit: string; date?: string }, checked: boolean, now = new Date()) {
+export async function agentCheck(
+  db: Db,
+  userId: string,
+  input: { habit: string; date?: string },
+  checked: boolean,
+  kind = false,
+  now = new Date(),
+) {
   const today = berlinToday(now);
   const habit = await findHabitByName(db, userId, input.habit);
   const period = periodFor(habit.frequency, input.date ?? today);
@@ -43,7 +50,7 @@ export async function agentCheck(db: Db, userId: string, input: { habit: string;
   const label = periodLabel(habit.frequency, period, today);
   let speech = `${checked ? "Ticked" : "Unticked"} ${habit.name} for ${label}.`;
   if (checked && habit.frequency !== "monthly") {
-    const day = await getDay(db, userId, undefined, now);
+    const day = await getDay(db, userId, undefined, now, kind);
     const s = [...day.habits.daily, ...day.habits.weekly].find((h) => h.id === habit.id)?.streak ?? 0;
     if (s > 0) speech += ` 🔥 ${plural(s, habit.frequency === "daily" ? "day" : "week")}.`;
   }

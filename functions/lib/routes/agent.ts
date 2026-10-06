@@ -48,13 +48,13 @@ export const agentRoutes = new Hono<AppEnv>()
     c.json(await undoAgentExpense(getDb(c.env.DB), c.get("userId"), c.req.param("id"))),
   )
   // "What's my plan today?"
-  .get("/planner/today", async (c) => c.json(await agentToday(getDb(c.env.DB), c.get("userId"))))
+  .get("/planner/today", async (c) => c.json(await agentToday(getDb(c.env.DB), c.get("userId"), c.var.extras.includes("kind_streaks"))))
   // "did gym": ticks today, this week or this month, depending on the habit.
   .post("/planner/habits/check", validate("json", agentHabitCheckSchema), async (c) =>
-    c.json(await agentCheck(getDb(c.env.DB), c.get("userId"), c.req.valid("json"), true)),
+    c.json(await agentCheck(getDb(c.env.DB), c.get("userId"), c.req.valid("json"), true, c.var.extras.includes("kind_streaks"))),
   )
   .delete("/planner/habits/check", validate("json", agentHabitCheckSchema), async (c) =>
-    c.json(await agentCheck(getDb(c.env.DB), c.get("userId"), c.req.valid("json"), false)),
+    c.json(await agentCheck(getDb(c.env.DB), c.get("userId"), c.req.valid("json"), false, c.var.extras.includes("kind_streaks"))),
   )
   // "top 3: A, B, C" replaces the day's list.
   .put("/planner/tasks", validate("json", agentTasksSchema), async (c) =>

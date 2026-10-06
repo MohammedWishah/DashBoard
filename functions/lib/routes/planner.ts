@@ -8,6 +8,8 @@ import * as planner from "../services/planner";
 import { validate } from "../validate";
 
 const db = (c: { env: AppEnv["Bindings"] }) => getDb(c.env.DB);
+/** Forgiving streaks are an extra. */
+const kind = (c: { var: AppEnv["Variables"] }) => c.var.extras.includes("kind_streaks");
 
 /** Path dates are checked like body dates. */
 function pathDate(value: string) {
@@ -17,7 +19,7 @@ function pathDate(value: string) {
 }
 
 export const plannerRoutes = new Hono<AppEnv>()
-  .get("/day", validate("query", dayQuerySchema), async (c) => c.json(await planner.getDay(db(c), c.get("userId"), c.req.valid("query").date)))
+  .get("/day", validate("query", dayQuerySchema), async (c) => c.json(await planner.getDay(db(c), c.get("userId"), c.req.valid("query").date, new Date(), kind(c))))
   .put("/day/:date/tasks", validate("json", dayTasksPutSchema), async (c) =>
     c.json({ tasks: await planner.putDayTasks(db(c), c.get("userId"), pathDate(c.req.param("date")), c.req.valid("json").tasks) }),
   )
@@ -25,7 +27,7 @@ export const plannerRoutes = new Hono<AppEnv>()
     c.json({ task: await planner.updateTask(db(c), c.get("userId"), c.req.param("id"), c.req.valid("json")) }),
   )
   .get("/month", validate("query", monthQuerySchema), async (c) =>
-    c.json(await planner.getMonth(db(c), c.get("userId"), c.req.valid("query").month)),
+    c.json(await planner.getMonth(db(c), c.get("userId"), c.req.valid("query").month, new Date(), kind(c))),
   )
   .get("/habits", async (c) => c.json({ habits: await planner.listHabits(db(c), c.get("userId")) }))
   .post("/habits", validate("json", habitCreateSchema), async (c) =>

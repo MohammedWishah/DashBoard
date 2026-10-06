@@ -90,6 +90,7 @@ function DailyGrid({ m }: { m: MonthView }) {
                     <span className="block max-w-36 truncate" title={r.habit.name}>
                       {r.habit.name}
                     </span>
+                    {r.total !== null && <span className="block text-[11px] text-muted-foreground">{r.total} done</span>}
                   </th>
                   {m.days.map((d) => (
                     <td key={d} className={cn("p-0", d === m.today && "rounded-[6px] shadow-[inset_0_0_0_1px_var(--ring)]")}>
@@ -104,6 +105,11 @@ function DailyGrid({ m }: { m: MonthView }) {
                   ))}
                   <td className="pl-2 text-right tabular-nums">{pct(r.percent)}</td>
                   <td className="pl-2 text-right tabular-nums">
+                    {r.atRisk && (
+                      <span className="mr-1 text-status-warning" title="Missed yesterday, tick today to keep it">
+                        ●<span className="sr-only">at risk</span>
+                      </span>
+                    )}
                     {r.streak > 0 ? (
                       <span className="inline-flex items-center gap-0.5">
                         <Fire weight="fill" className="text-primary" />
@@ -181,6 +187,7 @@ function WeeklyGrid({ m }: { m: MonthView }) {
                     <span className="block max-w-36 truncate" title={r.habit.name}>
                       {r.habit.name}
                     </span>
+                    {r.total !== null && <span className="block text-[11px] text-muted-foreground">{r.total} done</span>}
                   </th>
                   {r.weeks.map((w) => (
                     <td key={w.monday} className="text-center">

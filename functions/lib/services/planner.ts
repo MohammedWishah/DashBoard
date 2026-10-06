@@ -3,12 +3,14 @@ import { dayTasks, habitChecks, habits } from "../../../db/schema";
 import { berlinMonth, berlinToday } from "../../../shared/money";
 import {
   HABIT_LIMITS,
+  atRisk,
   createdDay,
   dayPercents,
   daysOfMonth,
   habitPercent,
   isFuturePeriod,
   isValidPeriod,
+  kindStreak,
   mondaysInMonth,
   periodFor,
   streak,
@@ -150,6 +152,13 @@ async function checksByHabit(db: Db, userId: string, habitIds: string[]) {
   return map;
 }
 
+/** Streak, total and at-risk for a habit, by the person's streak style. */
+function progress(f: Frequency, set: ReadonlySet<string>, today: string, kind: boolean) {
+  return kind
+    ? { streak: kindStreak(f, set, today), total: set.size, atRisk: atRisk(f, set, today) }
+    : { streak: streak(f, set, today), total: null, atRisk: false };
+}
+
 // ---- Day ----------------------------------------------------------------------
 
 async function listTasks(db: Db, userId: string, day: string): Promise<DayTaskRow[]> {
@@ -161,14 +170,14 @@ async function listTasks(db: Db, userId: string, day: string): Promise<DayTaskRo
   return rows.map(strip);
 }
 
-export async function getDay(db: Db, userId: string, date?: string, now = new Date()): Promise<DayView> {
+export async function getDay(db: Db, userId: string, date?: string, now = new Date(), kind = false): Promise<DayView> {
   const today = berlinToday(now);
   const day = date ?? today;
   const active = (await listHabits(db, userId)).filter((h) => !h.archived);
   const checks = await checksByHabit(db, userId, active.map((h) => h.id));
   const view = (h: HabitRow): DayHabit => {
     const set = checks.get(h.id)!;
-    return { ...h, checked: set.has(periodFor(h.frequency, day)), streak: streak(h.frequency, set, today) };
+    return { ...h, checked: set.has(periodFor(h.frequency, day)), ...progress(h.frequency, set, today, kind) };
   };
   return {
     date: day,
@@ -200,7 +209,7 @@ export async function updateTask(db: Db, userId: string, id: string, patch: Task
 
 // ---- Month --------------------------------------------------------------------
 
-export async function getMonth(db: Db, userId: string, month?: string, now = new Date()): Promise<MonthView> {
+export async function getMonth(db: Db, userId: string, month?: string, now = new Date(), kind = false): Promise<MonthView> {
   const today = berlinToday(now);
   const m = month ?? berlinMonth(now);
   const days = daysOfMonth(m);
@@ -217,7 +226,7 @@ export async function getMonth(db: Db, userId: string, month?: string, now = new
         habit: h,
         checks: days.filter((d) => set.has(d)),
         percent: habitPercent("daily", created(h), set, m, today),
-        streak: streak("daily", set, today),
+        ...progress("daily", set, today, kind),
       };
     });
   const weekly = active
@@ -228,10 +237,10 @@ export async function getMonth(db: Db, userId: string, month?: string, now = new
         habit: h,
         weeks: mondays.map((monday) => ({ monday, checked: set.has(monday) })),
         percent: habitPercent("weekly", created(h), set, m, today),
-        streak: streak("weekly", set, today),
+        ...progress("weekly", set, today, kind),
       };
     });
-  const monthly = active.filter((h) => h.frequency === "monthly").map((h) => ({ habit: h, checked: checks.get(h.id)!.has(`${m}-01`) }));
+  const monthly = active.filter((h) => h.frequency === "monthly").map((h) => ({ habit: h, checked: checks.get(h.id)!.has(`${m}-01`), total: kind ? checks.get(h.id)!.size : null }));
 
   return {
     month: m,

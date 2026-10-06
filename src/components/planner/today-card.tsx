@@ -69,7 +69,7 @@ function TopThree({ day }: { day: DayView }) {
   // Reset only when the saved tasks change, so a background refetch (e.g. after ticking a habit)
   // never wipes what the user is typing.
   const savedKey = JSON.stringify(day.tasks.map((t) => [t.text, t.done]));
-  useEffect(() => setDrafts(slots(day)), [savedKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => setDrafts(slots(day)), [savedKey]);
 
   function commit() {
     const tasks = drafts.filter((t) => t.text.trim()).map((t) => ({ text: t.text.trim(), done: t.done }));

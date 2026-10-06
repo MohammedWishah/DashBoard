@@ -1,15 +1,29 @@
 import { useState } from "react";
-import { berlinToday } from "@shared/money";
+import { GearSix } from "@phosphor-icons/react";
+import { berlinMonth, berlinToday } from "@shared/money";
 import { PageHeader } from "@/components/page-header";
+import { ManageHabits } from "@/components/planner/manage-habits";
+import { MonthSection } from "@/components/planner/month-section";
 import { TodayCard } from "@/components/planner/today-card";
+import { Button } from "@/components/ui/button";
 
 export default function PlannerPage() {
   const today = berlinToday();
+  const currentMonth = berlinMonth();
   const [date, setDate] = useState(today);
+  const [month, setMonth] = useState(currentMonth);
+  const [manage, setManage] = useState(false);
   return (
     <div className="grid gap-8">
-      <PageHeader title="Planner" />
+      <PageHeader title="Planner">
+        <Button variant="ghost" size="sm" onClick={() => setManage(true)}>
+          <GearSix />
+          <span className="hidden sm:inline">Manage habits</span>
+        </Button>
+      </PageHeader>
       <TodayCard date={date} today={today} onDate={setDate} />
+      <MonthSection month={month} currentMonth={currentMonth} onMonth={setMonth} />
+      <ManageHabits open={manage} onClose={() => setManage(false)} />
     </div>
   );
 }

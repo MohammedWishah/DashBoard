@@ -23,7 +23,7 @@ const monthLabel = (m: string) => format(parseISO(`${m}-01`), "MMM");
 const axis = { stroke: "var(--chart-axis)", fontSize: 11, tickLine: false, axisLine: false } as const;
 const grid = <CartesianGrid vertical={false} stroke="var(--chart-grid)" />;
 
-function ChartCard({
+export function ChartCard({
   title,
   subtitle,
   table,

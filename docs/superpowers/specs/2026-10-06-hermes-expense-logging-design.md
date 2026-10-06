@@ -25,7 +25,7 @@ Body (Zod, in `shared/schemas.ts`):
 |---|---|---|
 | `category` | string | 1 to 60 chars, trimmed |
 | `amount` | number | euros, > 0 and <= 100000, at most 2 decimals |
-| `note` | string? | trimmed, max 1000 (same as the browser route) |
+| `note` | string? | trimmed, max 500 (same as the browser expense note) |
 | `spentOn` | `YYYY-MM-DD`? | defaults to `berlinToday()` |
 
 `amount` is euros, unlike the browser routes (cents). An agent saying "50" means 50 euros, and cents would silently store €0.50. The server converts with `Math.round(amount * 100)`.
@@ -33,7 +33,7 @@ Body (Zod, in `shared/schemas.ts`):
 Category resolution (new service function `resolveCategoryForAgent`):
 
 1. Compare `category` to the user's **non-archived** categories, trimmed and case-insensitive. First match by sort order wins.
-2. If `category` is "other" (any case) and no non-archived Other exists, create a category named `Other` with no limit and use it.
+2. If `category` is "other" (any case) and no non-archived Other exists: un-archive an archived Other if there is one (a new one would clash on name), otherwise create `Other` with no limit.
 3. Otherwise respond `404 unknown_category`. The error carries `details: { categories: string[] }` (non-archived names, via the existing `ApiError` details field) so the agent can retry without another call. The message says to retry with the closest name, or with `Other` and the item as the note.
 
 Success, `201`:
@@ -55,10 +55,10 @@ This is for "undo that". It calls the existing `deleteExpense` (scoped by user i
 
 ## Hermes skill
 
-The file is `integrations/hermes/life-board-money/SKILL.md`. The user copies the folder into `~/.hermes/skills/`.
+The folder is `integrations/hermes/life-board-money/`: `SKILL.md` plus `scripts/life_board.py`, a small standard-library Python client (`log`, `undo`, `left`). The script builds the JSON itself, so notes like "McDonald's" can't break shell quoting, and it reads the token from the environment, so the model never sees it. The user copies the folder into `~/.hermes/skills/`; the two values go in `~/.hermes/.env`.
 
 - Frontmatter: `name`, short `description`, `version`, `required_environment_variables: [LIFE_BOARD_URL, LIFE_BOARD_TOKEN]`.
-- Procedure: parse the message, then `curl` POST.
+- Procedure: parse the message, then run the script.
   - On `unknown_category`: pick the closest name from the returned list. If none fits, use `Other` and put the item in `note`. Then retry once.
   - Reply with `speech`.
   - Keep the returned `expense.id` for undo.

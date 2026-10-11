@@ -8,6 +8,7 @@ import type {
   Stats,
   UpdateProjectInput,
 } from "@shared/schemas";
+import { guestFetch, isGuest } from "@/lib/guest";
 import { accessToken, supabase } from "@/lib/supabase";
 
 export class ApiError extends Error {
@@ -21,22 +22,27 @@ export class ApiError extends Error {
 }
 
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = await accessToken();
+  const guest = isGuest();
+  const token = guest ? null : await accessToken();
+  const options: RequestInit = {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token && { Authorization: `Bearer ${token}` }),
+      ...init?.headers,
+    },
+  };
   let res: Response;
   try {
-    res = await fetch(`/api${path}`, {
-      ...init,
-      headers: {
-        "Content-Type": "application/json",
-        ...(token && { Authorization: `Bearer ${token}` }),
-        ...init?.headers,
-      },
-    });
-  } catch {
-    throw new ApiError(0, "network", "Could not reach the server. Check your connection and try again.");
+    res = guest ? await guestFetch(path, options) : await fetch(`/api${path}`, options);
+  } catch (err) {
+    if (guest) console.error(err);
+    throw guest
+      ? new ApiError(0, "guest", "Guest mode could not start in this browser. Reload the page and try again.")
+      : new ApiError(0, "network", "Could not reach the server. Check your connection and try again.");
   }
   const body = (await res.json().catch(() => null)) as (T & Partial<ApiErrorBody>) | null;
-  if (res.status === 401) {
+  if (res.status === 401 && !guest) {
     // The session is gone or no longer valid: back to the sign-in screen.
     void supabase?.auth.signOut();
   }

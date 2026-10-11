@@ -5,10 +5,17 @@ import { Backdrop } from "@/components/backdrop";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { enterGuest, isGuest, leaveGuest } from "@/lib/guest";
 import { arrivedVia, authConfigured, supabase } from "@/lib/supabase";
 
-type AuthApi = { email: string; signOut: () => Promise<void> };
-const AuthContext = createContext<AuthApi>({ email: "", signOut: async () => {} });
+type AuthApi = {
+  email: string;
+  /** Trying the app without an account: data lives in this browser only. */
+  guest: boolean;
+  /** Signs out, or leaves guest mode. `wipe` also deletes the guest's local data. */
+  signOut: (opts?: { wipe?: boolean }) => Promise<void>;
+};
+const AuthContext = createContext<AuthApi>({ email: "", guest: false, signOut: async () => {} });
 export const useAuth = () => useContext(AuthContext);
 
 type Screen = "sign-in" | "forgot" | "set-password";
@@ -19,6 +26,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   // Invite and reset links sign the person in; they still need to choose a password.
   const [needsPassword, setNeedsPassword] = useState(arrivedVia !== null);
+  const [guest, setGuest] = useState(isGuest);
 
   useEffect(() => {
     if (!supabase) return;
@@ -31,10 +39,29 @@ export function AuthGate({ children }: { children: ReactNode }) {
     return () => data.subscription.unsubscribe();
   }, [queryClient]);
 
-  if (!authConfigured) return <NotConfigured />;
+  function startGuest() {
+    enterGuest();
+    queryClient.clear();
+    setGuest(true);
+  }
+
+  if (guest) {
+    const api: AuthApi = {
+      email: "Guest",
+      guest: true,
+      signOut: async ({ wipe } = {}) => {
+        await leaveGuest({ wipe });
+        queryClient.clear();
+        setGuest(false);
+      },
+    };
+    return <AuthContext.Provider value={api}>{children}</AuthContext.Provider>;
+  }
+
+  if (!authConfigured) return <NotConfigured onGuest={startGuest} />;
   if (session === undefined) return <div className="min-h-[100dvh] bg-background" />;
 
-  if (!session) return <AuthScreen initial={arrivedVia === "recovery" ? "forgot" : "sign-in"} />;
+  if (!session) return <AuthScreen initial={arrivedVia === "recovery" ? "forgot" : "sign-in"} onGuest={startGuest} />;
   if (needsPassword) {
     return (
       <AuthFrame>
@@ -45,6 +72,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   const api: AuthApi = {
     email: session.user.email ?? "",
+    guest: false,
     signOut: async () => {
       await supabase!.auth.signOut();
       queryClient.clear();
@@ -70,7 +98,18 @@ function AuthFrame({ children }: { children: ReactNode }) {
   );
 }
 
-function AuthScreen({ initial }: { initial: Screen }) {
+function GuestButton({ onGuest }: { onGuest: () => void }) {
+  return (
+    <div className="grid gap-2 border-t border-border/70 pt-5">
+      <Button type="button" variant="secondary" size="lg" onClick={onGuest}>
+        Try as guest
+      </Button>
+      <p className="text-center text-xs text-muted-foreground">No account needed. Try Money with data saved only in this browser.</p>
+    </div>
+  );
+}
+
+function AuthScreen({ initial, onGuest }: { initial: Screen; onGuest: () => void }) {
   const [screen, setScreen] = useState<Screen>(initial);
   const [email, setEmail] = useState("");
   return (
@@ -78,7 +117,10 @@ function AuthScreen({ initial }: { initial: Screen }) {
       {screen === "forgot" ? (
         <Forgot email={email} setEmail={setEmail} onBack={() => setScreen("sign-in")} />
       ) : (
-        <SignIn email={email} setEmail={setEmail} onForgot={() => setScreen("forgot")} />
+        <div className="grid gap-5">
+          <SignIn email={email} setEmail={setEmail} onForgot={() => setScreen("forgot")} />
+          <GuestButton onGuest={onGuest} />
+        </div>
       )}
     </AuthFrame>
   );
@@ -231,7 +273,7 @@ function SetPassword({ email, isInvite, onDone }: { email: string; isInvite: boo
   );
 }
 
-function NotConfigured() {
+function NotConfigured({ onGuest }: { onGuest: () => void }) {
   return (
     <AuthFrame>
       <div className="grid gap-3">
@@ -239,8 +281,9 @@ function NotConfigured() {
         <p className="text-sm text-muted-foreground">
           Add <code className="text-foreground">VITE_SUPABASE_URL</code> and{" "}
           <code className="text-foreground">VITE_SUPABASE_PUBLISHABLE_KEY</code> to <code className="text-foreground">.env.local</code>, then
-          restart. The README has the steps.
+          restart. docs/SETUP.md has the steps.
         </p>
+        <GuestButton onGuest={onGuest} />
       </div>
     </AuthFrame>
   );

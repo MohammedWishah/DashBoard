@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Copy, SignOut } from "@phosphor-icons/react";
+import { Copy, SignOut, Trash } from "@phosphor-icons/react";
 import { formatDistanceToNowStrict } from "date-fns";
 import { useAuth } from "@/components/auth/auth-gate";
 import { TransferButtons } from "@/components/transfer-buttons";
@@ -14,31 +14,55 @@ import { accountApi } from "@/lib/api";
 const tokenKey = ["agent-tokens"] as const;
 
 export function AccountDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
-  const { email, signOut } = useAuth();
+  const { email, guest, signOut } = useAuth();
+  const [confirmWipe, setConfirmWipe] = useState(false);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Account</DialogTitle>
-          <DialogDescription>Signed in as {email}</DialogDescription>
+          <DialogDescription>
+            {guest ? "You're trying Life Board as a guest. Your data is saved only in this browser." : `Signed in as ${email}`}
+          </DialogDescription>
         </DialogHeader>
 
-        {open && <VoiceTokens />}
+        {open && !guest && <VoiceTokens />}
 
         <section className="grid gap-2 border-t border-border/70 pt-5">
           <h3 className="text-sm font-semibold">Backup</h3>
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm text-muted-foreground">Download or restore all your projects and money as one file.</p>
+            <p className="text-sm text-muted-foreground">
+              {guest
+                ? "Download your guest data as one file. You can restore it into a real account later."
+                : "Download or restore all your projects and money as one file."}
+            </p>
             <div className="flex shrink-0">
               <TransferButtons />
             </div>
           </div>
         </section>
 
-        <Button variant="secondary" onClick={() => void signOut()} className="justify-self-start">
-          <SignOut />
-          Sign out
-        </Button>
+        {guest ? (
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={() => void signOut()}>
+              <SignOut />
+              Leave guest mode
+            </Button>
+            <Button
+              variant={confirmWipe ? "destructive" : "ghost"}
+              onClick={() => (confirmWipe ? void signOut({ wipe: true }) : setConfirmWipe(true))}
+              onBlur={() => setConfirmWipe(false)}
+            >
+              <Trash />
+              {confirmWipe ? "Delete for good?" : "Delete guest data"}
+            </Button>
+          </div>
+        ) : (
+          <Button variant="secondary" onClick={() => void signOut()} className="justify-self-start">
+            <SignOut />
+            Sign out
+          </Button>
+        )}
       </DialogContent>
     </Dialog>
   );

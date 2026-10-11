@@ -1,381 +1,83 @@
+<div align="center">
+
+<img src="public/favicon.svg" alt="" width="56" />
+
 # Life Board
 
-A personal life dashboard with three sections:
+**One calm place for your money, your day and your side projects.**
 
-- **Home:** what's left this month, the next bill, and your active projects' next actions.
-- **Money:** expenses, monthly category limits, recurring bills that log themselves, income, savings goals, debts, and charts.
-- **Projects:** a side-project board. At most two projects are active, each shows one concrete next action, stale projects surface on their own, and shipped work is counted per week.
+[![Deploy](https://github.com/MohammedWishah/DashBoard/actions/workflows/deploy.yml/badge.svg)](https://github.com/MohammedWishah/DashBoard/actions/workflows/deploy.yml)
 
-Several people can use it, each with their own private data and an email + password login. The admin decides who gets which section. A voice assistant can read and update it over HTTPS with a per-person token. Planner and Habits are planned as later sections (see `docs/superpowers/specs/`).
+[Open the app](https://app.mohammedwishah.com) · [Try it as a guest](#try-it) · [How it works](docs/HOW-IT-WORKS.md) · [API](docs/API.md)
 
-**Stack:** React + Vite + TypeScript, Tailwind CSS v4, shadcn/ui (Radix) incl. charts (Recharts), TanStack Query, wouter, date-fns · Hono on Cloudflare Pages Functions · Cloudflare D1 with Drizzle ORM · Supabase Auth (login only) with `jose` token checks · Zod schemas shared between UI and API · Vitest · ShaderGradient (react-three-fiber) for the header band.
+</div>
 
-```
-src/          React app. routes/ = pages, components/money/ = Money UI, hooks/ = TanStack Query + optimistic updates
-functions/    Pages Functions. api/[[route]].ts mounts the Hono app from functions/lib/
-db/           Drizzle schema (schema.ts) and SQL migrations (migrations/)
-shared/       Zod schemas, types, and pure rules used by both sides (money.ts has unit tests)
-docs/         Design specs
-```
+![The Money page: what's left this month, category limits and upcoming bills](docs/images/money.png)
 
-## Money rules
+## What it does
 
-| Rule | Detail |
-| --- | --- |
-| Amounts are whole cents | The UI accepts `12`, `12.5`, `12,50`, `1.234,56` and converts. The API only takes integer cents. |
-| Months follow Berlin time | "Today" and "this month" are Europe/Berlin calendar dates, never the server's UTC clock. |
-| Bills log themselves | On its due day a recurring bill becomes an expense. If the app wasn't opened, it catches up. A bill on the 31st lands on the last day of shorter months. |
-| Deleted bill expenses stay deleted | Each bill remembers the last due date it logged, so deleting one (a skipped month) never brings it back. |
-| Left in a category | Limit − spent − upcoming bills this month. Amber from 80%, red when over, always with an icon and label. |
-| Left this month | Income − expenses − money put into savings − debt payments. |
-| Categories in use can't be deleted | The API returns `409 category_in_use`; the UI archives them instead, keeping history. |
+Life Board answers three questions at a glance: *How much can I still spend?* *What am I doing today?* *What's the next step on my projects?*
 
-## Project rules
+- **Money:** log expenses in two taps, set monthly limits per category, and see what's left. Recurring bills log themselves on their due day. Track income, savings goals and debts, with charts for each month.
+- **Planner:** pick a top 3 for the day, tick daily, weekly and monthly habits, and watch your streaks grow.
+- **Projects:** a side-project board that keeps you focused. At most two projects are active, each one shows its next concrete step, and shipped work is counted every week.
+- **Home:** today's summary: money left, the next bill, and your next actions.
 
-| Rule | Where |
-| --- | --- |
-| Max 2 projects with status `active` | Server returns `409 active_limit`. The UI warns and disables "Active" before you hit it. |
-| Any change to a project updates `last_touched` | Every PATCH and every ship. A weekly review counts as a change. |
-| Stale = `last_touched` older than 30 days | `shared/time.ts`. API responses include `stale: true/false`. |
-| Shipped this week = events since Monday 00:00 Europe/Berlin | `shared/time.ts`, handles daylight saving. |
-| Project names are unique (ignoring case and extra spaces) | Server returns `409 name_taken`. The voice assistant looks projects up by name. |
+<table>
+  <tr>
+    <td width="72%"><img src="docs/images/charts.png" alt="Spending pace, spending by category and the last six months" /></td>
+    <td><img src="docs/images/phone.png" alt="The Money page on a phone" /></td>
+  </tr>
+</table>
 
-Archived projects don't appear in any tab. They stay in the database and in exports.
+## Highlights
 
-## Accounts and roles
+- **Built for real life:** undo on every delete, amounts typed as `12,50` or `12.5`, and the month follows your time zone (Berlin), not the server's.
+- **Private by design:** invite-only email login. Each person sees only their own data, and the admin chooses which sections each person gets.
+- **Voice and chat:** a voice assistant or [Hermes](integrations/hermes/life-board/SKILL.md) on Telegram can log expenses, tick habits and send morning and evening check-ins.
+- **Optional extras:** a want list that makes impulse buys wait a few days, forgiving streaks, a daily energy check-in, and a weekly wins card.
+- **Phone-first:** works as an installable app, with a bottom bar and a quick-add button.
 
-- **Login:** everyone signs in with email + password. [Supabase Auth](https://supabase.com/docs/guides/auth) stores the passwords and sends the invite and reset emails. Supabase stores **no app data**; that all stays in Cloudflare D1.
-- **Invite only:** sign-ups are off. You invite people from the Supabase dashboard.
-- **Private data:** each person only ever sees their own projects, money and planner. `scripts/isolation-check.mjs` proves it (100+ checks).
-- **Admin:** the person whose email is `OWNER_EMAIL`. They have every section, own the data from before accounts existed, and get a **People** page to choose what each person can use.
-- **Defaults:** new people get **Money** and **Planner**. **Projects** stays admin-only until you switch it on for someone. (Habits live inside Planner.) The API enforces this too, not just the menu.
-- **Extras:** small optional helpers, **off for everyone by default** (the admin too). Switch them on per person on People: *Today on Home*, *Forgiving streaks* (one missed day doesn't break a streak), *Wins* (this week's finished things), *Want list* (a cooling-off queue for impulse buys: under €50 waits a day, up to €200 three days, more a week) *Hermes nudges* (morning, evening and Sunday messages), *Tiny versions* (a fallback like "1 page" under a habit), *Time of day* (habits grouped morning / afternoon / evening) and *Energy check-in* (low / ok / high once a day, with a pattern line in Wins after a few weeks). An extra only works while its section is on.
+## Try it
 
-## Set up Supabase (login only)
+**No account?** Click **Try as guest** on the sign-in screen. You get the full Money dashboard, running entirely in your browser. Nothing is sent to a server, and you can download your data anytime.
 
-1. Create a free project at [supabase.com](https://supabase.com).
-2. **Project Settings > API:** copy the **Project URL** and the **publishable key** (called "anon" key in older projects).
-3. **Authentication > Sign In / Providers > Email:**
-   - turn **off** "Allow new users to sign up" (invite only)
-   - keep Email enabled
-4. **Authentication > URL Configuration:**
-   - **Site URL:** your app's address, e.g. `https://project-board.pages.dev`
-   - **Redirect URLs:** add the same address, plus `http://localhost:5173` for local use
-5. **Invite yourself first:** Authentication > Users > **Invite user** with your `OWNER_EMAIL`. Open the email, choose a password.
-6. **Before inviting anyone else**, add custom SMTP (Authentication > Emails > SMTP Settings), for example [Resend](https://resend.com)'s free tier. Supabase's built-in sender only delivers to your own Supabase team and only 2 emails per hour, so invites and password resets wouldn't reach other people.
-
-To add a person later: Supabase > Authentication > Users > Invite user. After their first sign-in they appear on **People**, where you switch sections on or off.
-
-## Local development
-
-Needs Node 20+.
+To run it locally:
 
 ```bash
+git clone https://github.com/MohammedWishah/DashBoard.git
+cd DashBoard
 npm install
-cp .env.example .env.local              # VITE_SUPABASE_URL + VITE_SUPABASE_PUBLISHABLE_KEY
-cp .dev.vars.example .dev.vars          # SUPABASE_URL + OWNER_EMAIL for the local API
-npm run db:migrate:local                # creates the local D1 database in .wrangler/
-npm run dev                             # wrangler pages dev on :8788 + Vite on :5173
+npm run dev:web
 ```
 
-Open http://localhost:5173 and sign in with your Supabase account. Vite proxies `/api` to the Functions on `:8788`.
+Open http://localhost:5173 and click **Try as guest**. No database or login setup is needed. For the full app with accounts, follow [docs/SETUP.md](docs/SETUP.md).
 
-Other scripts:
+## Built with
 
-```bash
-npm run typecheck        # frontend + functions
-npm test                 # unit tests for the money rules (vitest)
-npm run build            # production build into dist/
-npm run preview          # build, then serve dist/ + functions together on :8788
-npm run db:generate      # after editing db/schema.ts: writes a new SQL migration
-node scripts/isolation-check.mjs   # privacy + roles checks against the local API (see below)
+| Layer | Tools |
+| --- | --- |
+| Frontend | React, TypeScript, Vite, Tailwind CSS, shadcn/ui, TanStack Query, Recharts |
+| API | Hono on Cloudflare Pages Functions |
+| Data | Cloudflare D1 (SQLite) with Drizzle ORM |
+| Login | Supabase Auth (login only, no app data) |
+| Shared | Zod schemas and business rules used by both the app and the API, tested with Vitest |
+
+## Project layout
+
+```
+src/        React app: pages in routes/, UI in components/, data hooks in hooks/
+functions/  The API (Hono) that runs on Cloudflare
+shared/     Rules and schemas used by both sides
+db/         Database schema and migrations
+docs/       Setup, deploy, rules and API reference
 ```
 
-The isolation check signs its own test tokens. Set `SUPABASE_JWT_SECRET=any-long-string` in `.dev.vars`, restart `npm run dev:api`, then run it. Leave that secret out in production.
-
-## Deploy to Cloudflare Pages
-
-Short version with explanations: [docs/DEPLOY.md](docs/DEPLOY.md).
-
-1. **Log in**
-
-   ```bash
-   npx wrangler login
-   ```
-
-2. **Create the D1 database**
-
-   ```bash
-   npx wrangler d1 create project-board
-   ```
-
-   Copy the printed `database_id` into `wrangler.toml`, replacing the zeros.
-
-3. **Set the Supabase vars** in `wrangler.toml` under `[vars]`:
-   - `SUPABASE_URL`: your Project URL
-   - `OWNER_EMAIL`: your email (this makes you admin)
-
-4. **Run migrations** locally and remotely (run the remote one again after every update that adds a migration)
-
-   ```bash
-   npm run db:migrate:local
-   npm run db:migrate:remote
-   ```
-
-5. **Create the Pages project**
-
-   ```bash
-   npx wrangler pages project create project-board --production-branch main
-   ```
-
-6. **Build with the frontend Supabase values and deploy.** `.env.local` (from step "Local development") is read at build time:
-
-   ```bash
-   npm run deploy
-   ```
-
-   The app is now at `https://project-board.pages.dev`. Sign in with the account you invited in Supabase.
-
-If you set up Cloudflare Access for the earlier version, remove those Access applications in Zero Trust. Login now happens in the app, and Access would make everyone sign in twice.
-
-## API
-
-All bodies are JSON. Errors always look like `{ "error": { "code": "...", "message": "..." } }`, and the message is written to be read out loud.
-
-Browser routes need `Authorization: Bearer <Supabase access token>` (the app adds it). Missing or invalid: `401`. A section that isn't switched on for the person: `403 feature_disabled`.
-
-### Account routes (signed-in user)
-
-| Method | Path | Notes |
-| --- | --- | --- |
-| GET | `/api/me` | `{ id, email, isAdmin, features }` |
-| GET / POST | `/api/agent-tokens` | POST `{ name }` returns `{ token }` once; only a hash is stored |
-| DELETE | `/api/agent-tokens/:id` | revoke |
-| GET | `/api/export` | the person's own data as one JSON file |
-| POST | `/api/import` | a file from `/api/export`. Validated with Zod (active limit, duplicate ids, every reference), then applied in one D1 transaction with fresh ids. Replaces only the importer's data. Version 1 files (from before Money) replace projects only. |
-
-### Admin routes (OWNER_EMAIL only)
-
-| Method | Path | Notes |
-| --- | --- | --- |
-| GET | `/api/admin/users` | everyone who has signed in, with their features |
-| PATCH | `/api/admin/users/:id` | `{ features: ["money", "planner", "projects", "habits"] }` (any subset) |
-
-### Project routes (signed-in user, Projects switched on)
-
-| Method | Path | Body |
-| --- | --- | --- |
-| GET | `/api/projects` | |
-| POST | `/api/projects` | `{ name, nextAction, doneDefinition?, status? }` (status defaults to `parked`) |
-| PATCH | `/api/projects/:id` | any of `{ name, status, nextAction, doneDefinition }` |
-| POST | `/api/projects/:id/ship` | `{ note? }` |
-| GET | `/api/stats` | returns `{ shippedThisWeek, availableHoursThisWeek, weekStartsAt }` |
-| PUT | `/api/settings` | `{ availableHoursThisWeek }` (0 to 168) |
-
-### Money routes (signed-in user, Money switched on)
-
-All take and return integer cents and `YYYY-MM-DD` dates. `?month=YYYY-MM` defaults to the current Berlin month.
-
-| Method | Path | Notes |
-| --- | --- | --- |
-| GET | `/api/money/overview?month=` | Totals, categories with spent/upcoming/left, bills, last 10 expenses, income, goals, debts |
-| GET | `/api/money/charts?month=` | Pace series, spending by category, last 6 months, debt balances |
-| GET / POST | `/api/money/expenses` | `{ categoryId, amountCents, spentOn, note? }` |
-| PATCH / DELETE | `/api/money/expenses/:id` | |
-| GET / POST | `/api/money/categories` | `{ name, monthlyLimitCents? }` |
-| PATCH / DELETE | `/api/money/categories/:id` | PATCH also takes `sortOrder`, `archived`. DELETE returns 409 when in use. |
-| GET / POST | `/api/money/bills` | `{ name, categoryId, amountCents, dayOfMonth, startsOn? }` |
-| PATCH / DELETE | `/api/money/bills/:id` | DELETE stops the bill; logged expenses stay |
-| POST | `/api/money/income` | `{ amountCents, source, receivedOn, note? }` (PATCH / DELETE on `/:id`) |
-| GET / POST | `/api/money/goals` | `{ name, targetCents, targetDate? }` (PATCH / DELETE on `/:id`) |
-| POST | `/api/money/goals/:id/contributions` | `{ amountCents, onDate }`, negative to take money out. DELETE `/api/money/contributions/:id` |
-| GET / POST | `/api/money/debts` | `{ name, startingBalanceCents, startedOn }` (PATCH / DELETE on `/:id`) |
-| POST | `/api/money/debts/:id/payments` | `{ amountCents, paidOn }`. DELETE `/api/money/payments/:id` |
-| GET / POST | `/api/money/wants` | Want list extra. GET `{ waiting, decided, savedCents }`; POST `{ name, priceCents, url? }` |
-| POST | `/api/money/wants/:id/buy` | `{ categoryId, spentOn?, priceCents? }` logs the expense. Twice: 409. |
-| POST / DELETE | `/api/money/wants/:id/skip`, `/api/money/wants/:id` | Skip (counts as saved) / remove a mistake |
-
-### Planner routes (signed-in user, Planner switched on)
-
-Dates are Berlin `YYYY-MM-DD`; weeks start on Monday. A check's period is the date (daily), the week's Monday (weekly) or the 1st (monthly).
-
-| Method | Path | Notes |
-| --- | --- | --- |
-| GET | `/api/planner/day?date=` | `{ date, today, tasks, habits: { daily, weekly, monthly } }`, each habit with `checked` and `streak`. Defaults to today. |
-| PUT | `/api/planner/day/:date/tasks` | `{ tasks: [{ text, done? }] }`, at most 3, replaces the day's top 3 |
-| PATCH | `/api/planner/tasks/:id` | `{ text?, done? }` |
-| GET | `/api/planner/month?month=` | Daily grid, `dayPercents` for the chart, weekly grid, monthly list, `top` 10 |
-| GET / POST | `/api/planner/habits` | POST `{ name, frequency: "daily" \| "weekly" \| "monthly" }`. Names are unique per person (any case). Limits: 50 / 20 / 40 active. |
-| PATCH / DELETE | `/api/planner/habits/:id` | PATCH `{ name?, sortOrder?, archived?, tiny?, timeOfDay? }` (`tiny: ""` clears it; `timeOfDay`: morning, afternoon, evening, any). DELETE removes the habit and its history. |
-| PUT | `/api/planner/habits/order` | `{ ids: [...] }` sets the order; any id that isn't yours is a 404 |
-| PUT / DELETE | `/api/planner/energy/:date` | Energy check-in extra. `{ level: "low" \| "ok" \| "high" }`, one per day (PUT replaces). Future dates: 400. |
-| PUT / DELETE | `/api/planner/habits/:id/checks/:period` | Tick / untick. Wrong period key: 400. Future period: 400 `future_period`. Archived habit: 409. Twice is a no-op. |
-| GET | `/api/planner/wins?week=` | Wins extra. The week's finished top-3 tasks, habit ticks, shipped projects, no-spend days and skipped buys, with a `total`. `week` is a Monday. |
-
-### Agent routes (voice assistant token)
-
-Create a token in the app: click your email (sidebar, or the person icon on phone) > **Voice assistant** > Create. It's shown once. The assistant then acts as you, with your sections: project routes need Projects, money routes need Money, planner routes need Planner. Revoke a token there any time.
-
-`:ref` is a project id **or its name**, case-insensitive and URL-encoded. They call the same service functions as the browser routes, so the same rules apply.
-
-```bash
-BASE=https://project-board.pages.dev
-TOKEN=lb_your-token-from-the-app
-```
-
-**List all projects**
-
-```bash
-curl -s "$BASE/api/agent/projects" \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-**Next actions for active projects** (short, with a ready-to-speak `speech` string)
-
-```bash
-curl -s "$BASE/api/agent/next-actions" \
-  -H "Authorization: Bearer $TOKEN"
-# {"items":[{"name":"Garden Planner","nextAction":"Wire the frost-date lookup."}],
-#  "speech":"Garden Planner: Wire the frost-date lookup."}
-```
-
-**Update a project by name**
-
-```bash
-curl -s -X PATCH "$BASE/api/agent/projects/garden%20planner" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"nextAction":"Test the planting calendar on my phone."}'
-```
-
-**Park or activate a project** (activation returns 409 if both slots are taken)
-
-```bash
-curl -s -X PATCH "$BASE/api/agent/projects/Synth%20Firmware" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"status":"parked"}'
-```
-
-**Update by id**
-
-```bash
-curl -s -X PATCH "$BASE/api/agent/projects/9f125f2c-7586-4607-8b03-13238be70a45" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"status":"active"}'
-```
-
-**Log a ship with a note**
-
-```bash
-curl -s -X POST "$BASE/api/agent/projects/garden%20planner/ship" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"note":"Frost dates are live"}'
-```
-
-**Log a ship without a note** (no body needed)
-
-```bash
-curl -s -X POST "$BASE/api/agent/projects/garden%20planner/ship" \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-**How much money is left this month**
-
-```bash
-curl -s "$BASE/api/agent/money/left" \
-  -H "Authorization: Bearer $TOKEN"
-# {"month":"2026-10","leftCents":107250,"categories":[{"name":"Food","leftCents":8800}],
-#  "speech":"You have 1072 euros left this month. Gym has 0 euros left."}
-```
-
-The speech names any category at 80% of its limit or over.
-
-**Log an expense** (`amount` is euros; `spentOn` defaults to today, Berlin time)
-
-```bash
-curl -s -X POST "$BASE/api/agent/money/expenses" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"category":"food","amount":12.4,"note":"Lidl"}'
-# 201 {"expense":{"id":"…","category":"Food","amountCents":1240,"spentOn":"2026-10-06","note":"Lidl"},
-#      "speech":"Logged €12.40 in Food. 38 euros left in Food this month."}
-```
-
-The category matches your category names, ignoring case. `"Other"` always works (it's created or un-archived if needed). Any other unknown name returns `404 unknown_category` with your names in `error.details.categories`, so the agent can retry with the closest one, or with `Other` and the item as the note.
-
-**Undo** (the id from the reply above)
-
-```bash
-curl -s -X DELETE "$BASE/api/agent/money/expenses/EXPENSE_ID" \
-  -H "Authorization: Bearer $TOKEN"
-# {"speech":"Removed €12.40 from Food."}
-```
-
-**Today's plan** (top 3 and what's left to tick)
-
-```bash
-curl -s "$BASE/api/agent/planner/today" \
-  -H "Authorization: Bearer $TOKEN"
-# {..., "speech":"Top 3: Call the bank (done), Finish report. Habits left today: Gym. This week: Clean."}
-```
-
-**Tick a habit by name** (today, this week or this month, depending on the habit; `date` optional; DELETE unticks)
-
-```bash
-curl -s -X POST "$BASE/api/agent/planner/habits/check" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"habit":"gym"}'
-# {"habit":"Gym","frequency":"weekly","period":"2026-10-05","checked":true,"speech":"Ticked Gym for this week. 🔥 2 weeks."}
-```
-
-Unknown names return `404 unknown_habit` with `error.details.habits` (name and frequency).
-
-**Set the top 3** (replaces the day's list), then **mark one done** by text or position
-
-```bash
-curl -s -X PUT "$BASE/api/agent/planner/tasks" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"tasks":["Call the bank","Finish report"]}'
-
-curl -s -X POST "$BASE/api/agent/planner/tasks/done" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"task":"1"}'
-# {..., "speech":"Done: Call the bank. 1 of 2 done."}
-```
-
-**Want list** (Want list extra; `amount` is euros, `"12,40"` works too)
-
-```bash
-curl -s -X POST "$BASE/api/agent/money/wants" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"AirPods","amount":200}'
-# {..., "speech":"Added AirPods (€200.00) to your want list. Ask me again in 3 days."}
-```
-
-`POST /api/agent/planner/energy` takes `{ "level": "high", "date"? }` (Energy check-in extra).
-
-`POST /api/agent/money/wants/skip` takes `{ "name" }`; `POST /api/agent/money/wants/buy` takes `{ "name", "category", "amount"? }`. Unknown names: `404 unknown_want` with `error.details.wants`.
-
-**Briefing** for Hermes nudge scripts (`morning`, `evening` or `weekly`). An empty `message` means "say nothing", also when the nudges extra is off.
-
-```bash
-curl -s "$BASE/api/agent/briefing/morning" \
-  -H "Authorization: Bearer $TOKEN"
-# {"message":"Good morning. Top 3: not set yet — reply \"top 3: …\".
-Habits today: Read, Water."}
-```
-
-To set it up in Hermes Agent, see [integrations/hermes/life-board](integrations/hermes/life-board/SKILL.md).
-
-Locally, use `BASE=http://127.0.0.1:8788` and a token created in your local app.
-
-## Design notes
-
-Dark only, by design. Tokens follow the Vercel/Geist language from [awesome-design-md](https://github.com/VoltAgent/awesome-design-md): Geist and Geist Mono, monochrome neutrals, hairline borders, one 8px radius scale. The only UI accent is emerald, used for Ship buttons and progress. Charts use the dataviz reference palette (blue for spending, orange for income), checked for color-blind safety against the dark card surface; warning/over states use reserved status colors and always come with an icon and label. Every chart has a Table view. The header band is a [ShaderGradient](https://github.com/ruucm/shadergradient) water plane in two emerald greens. It loads lazily (three.js is its own chunk), stops animating under `prefers-reduced-motion`, and falls back to a static CSS gradient without WebGL.
+## Docs
+
+| Doc | What's inside |
+| --- | --- |
+| [How it works](docs/HOW-IT-WORKS.md) | Money and project rules, accounts and roles, extras, guest mode, design notes |
+| [Setup](docs/SETUP.md) | Supabase login, local development, manual deploy |
+| [Deploy](docs/DEPLOY.md) | How it reaches production, auto-deploy, troubleshooting |
+| [API](docs/API.md) | Every route, including the voice assistant routes with `curl` examples |

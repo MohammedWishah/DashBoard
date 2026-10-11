@@ -9,6 +9,8 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "src"),
       "@shared": path.resolve(__dirname, "shared"),
+      // Guest mode runs the API in the browser; see src/lib/guest.ts.
+      "@guest-api": path.resolve(__dirname, "functions/lib/guest.ts"),
     },
   },
   server: {
